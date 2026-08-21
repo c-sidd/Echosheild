@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Minimal THREDDS server configuration for EchoShield development. -->
+<threddsConfig>
+
+  <server>
+    <name>EchoShield THREDDS</name>
+    <logoUrl>/thredds/threddsIcon.png</logoUrl>
+    <logoAltText>EchoShield THREDDS</logoAltText>
+    <allowRemote>false</allowRemote>
+    <implementAllowRemote>false</implementAllowRemote>
+  </server>
+
+  <catalogRoot>catalog.xml</catalogRoot>
+
+  <DatasetRoots>
+    <datasetRoot path="sample" location="/opt/data" />
+  </DatasetRoots>
+
+  <WMS>
+    <allow>true</allow>
+    <allowDatasetFeatureType>GRID and STATION</allowDatasetFeatureType>
+  </WMS>
+
+  <HTTPService>
+    <allow>true</allow>
+  </HTTPService>
+
+  <ODAP>
+    <maxServerThreads>10</maxServerThreads>
+  </ODAP>
+
+</threddsConfig>

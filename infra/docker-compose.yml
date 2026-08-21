@@ -1,0 +1,64 @@
+name: echoshield
+
+services:
+  backend:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    container_name: echoshield-backend
+    environment:
+      APP_NAME: echoshield-backend
+      APP_ENV: ${APP_ENV:-development}
+      DEBUG: ${DEBUG:-false}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173,http://localhost:3000}
+      # Service-name based communication inside the compose network:
+      THREDDS_BASE_URL: http://thredds:8080/thredds
+      THREDDS_CATALOG_URL: http://thredds:8080/thredds/catalog.xml
+      OPENDAP_BASE_URL: http://thredds:8080/thredds
+      WMS_BASE_URL: http://thredds:8080/thredds
+      WCS_BASE_URL: ${WCS_BASE_URL:-}
+      INCOIS_ERDDAP_URL: ${INCOIS_ERDDAP_URL:-https://erddap.incois.gov.in/erddap}
+      ARGO_SOURCE: ${ARGO_SOURCE:-erddap}
+      ARGO_DATASET: ${ARGO_DATASET:-phy}
+      GLIDER_DATA_URL: ${GLIDER_DATA_URL:-}
+      DATA_ROOT: /data
+      NETCDF_DATA_ROOT: /data/sample_netcdf
+      ARGO_CACHE_DIR: /data/argo_cache
+      GLIDER_CACHE_DIR: /data/glider_cache
+      REQUEST_TIMEOUT: ${REQUEST_TIMEOUT:-30}
+      MAX_GRID_POINTS: ${MAX_GRID_POINTS:-100000}
+    ports:
+      - "8000:8000"
+    volumes:
+      - ../data:/data
+    depends_on:
+      - thredds
+    restart: unless-stopped
+
+  thredds:
+    image: unidata/thredds-docker:5.6
+    container_name: echoshield-thredds
+    environment:
+      TDS_PW: ${TDS_PASSWORD:-echoshield-admin}
+      TDS_CONTENT_ROOT_PATH: /usr/local/tomcat/content
+      THREDDS_XMX_SIZE: ${THREDDS_XMX_SIZE:-1G}
+      THREDDS_XMS_SIZE: 256M
+    ports:
+      - "8080:8080"
+    volumes:
+      # Persistent THREDDS configuration (catalog.xml, threddsConfig.xml, logs)
+      - ../thredds/content:/usr/local/tomcat/content/thredds
+      # Sample scientific data served through OPeNDAP/WMS (read-only)
+      - ../data/sample_netcdf:/opt/data:ro
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl -fsS http://127.0.0.1:8080/thredds/catalog.html >/dev/null || exit 1",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 90s
+    restart: unless-stopped

@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Environment / secrets
+.env
+.env.local
+*.env
+
+# Node / frontend build artifacts
+node_modules/
+dist/
+.vite/
+
+# Scientific data (never commit large datasets)
+data/**/*.nc
+data/**/*.zarr/
+data/**/*.nc4
+data/**/*.cdf
+data/argo_cache/*
+data/glider_cache/*
+!data/**/.gitkeep
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
