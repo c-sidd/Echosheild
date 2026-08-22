@@ -2,6 +2,25 @@
 
 FastAPI application layer for the EchoSheild 3D Ocean Data Visualization Platform.
 
+## Problem-statement status (audit 2026-08-22)
+
+SIH PS: web-based interactive 3D ocean visualization integrating model outputs
+and in-situ observations. Current completion vs its requirements:
+
+| Requirement | Status | Notes |
+| --- | --- | --- |
+| 3D volumetric rendering (slices/isosurfaces/animation) | backend-ready, no UI | `slice`, `times`, `currents` APIs live; WebGL layer not started (`frontend/` is empty scaffolding) |
+| Instrument overlay (Argo/Glider/CTD/BGC) | partial | Argo complete (remote + local-cache provider, profile drill-down); glider pluggable stub; CTD/BGC not started |
+| Multi-format ingestion (NetCDF + text, modular) | done | xarray/pydap, CSV/TSV, ISO 19115 auto-discovery, canonical variable-mapping layer |
+| Colorbar/variable/opacity/exaggeration controls | backend-ready, no UI | units, ranges, `max_speed_ms`, downsampling strides exposed for the UI |
+| Scalable web architecture (REST/OPeNDAP, deployable) | done* | FastAPI + THREDDS client + docker compose; *containers not yet exercised end-to-end (network/daemon limits) |
+| Extensible plugin design | partial | `GliderClient` seam, `ARGO_PROVIDER` factory, canonical layer; needs a second concrete plugin |
+| Open standards (CF, WMS/WCS) | partial | CF coordinate/variable resolution implemented; WMS advertised from metadata (unverified live); no WCS |
+
+Overall ≈ 40%: backend/data layer ~85% (tested, live-verified),
+presentation layer 0%. Next milestone: frontend bootstrap + first
+slice-rendering loop against `local_synthetic_ocean`.
+
 ## Architecture
 
 ```
