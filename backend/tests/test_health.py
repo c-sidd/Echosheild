@@ -13,6 +13,12 @@ def test_health(client: TestClient) -> None:
     assert payload["service"] == "echoshield-backend"
     assert payload["version"]
     assert payload["environment"] in {"development", "staging", "production"}
+    # Optional scientific dependencies are reported individually.
+    deps = payload["optional_dependencies"]
+    assert {"xarray", "netCDF4", "argopy"} <= set(deps)
+    assert all(state == "available" for state in deps.values())
+    # THREDDS is not configured in test settings.
+    assert payload["thredds_configured"] is False
 
 
 def test_readiness_reports_dependencies(client: TestClient) -> None:

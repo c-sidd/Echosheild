@@ -147,6 +147,9 @@ class HealthStatus(BaseModel):
     service: str
     version: str
     environment: str
+    # Importability of heavy/optional scientific packages (no side effects).
+    optional_dependencies: dict[str, str] = Field(default_factory=dict)
+    thredds_configured: bool = False
 
 
 class DependencyStatus(BaseModel):
@@ -208,6 +211,3 @@ class TextParseResult(BaseModel):
 class GliderNotConfigured(BaseModel):
     detail: str
     status: str = "not_configured"
-
-
-GlidersResponse = ArgoFloatDetail | GliderNotConfigured

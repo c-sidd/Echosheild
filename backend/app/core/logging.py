@@ -25,16 +25,6 @@ def configure_logging() -> None:
         logging.getLogger(noisy).setLevel(max(logging.WARNING, level))
 
 
-class RequestContextLogFilter(logging.Filter):
-    """Attach request-scoped fields (dataset, variable, ...) to records."""
-
-    def filter(self, record: logging.LogRecord) -> bool:  # noqa: A003
-        for key in ("dataset", "variable", "upstream", "duration_ms", "status_code"):
-            if not hasattr(record, key):
-                setattr(record, key, None)
-        return True
-
-
 def log_event(message: str, /, **fields: object) -> None:
     """Emit a structured event line: ``message key=value ...``."""
     parts = [message] + [f"{key}={value}" for key, value in fields.items() if value is not None]

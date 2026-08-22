@@ -65,32 +65,6 @@ def async_retry[**P, T](
     return decorator
 
 
-def sync_retry[**P, T](
-    operation: str,
-    *,
-    attempts: int = 3,
-    initial_wait: float = 0.5,
-    max_wait: float = 8.0,
-) -> Callable[[Callable[P, T]], Callable[P, T]]:
-    """Decorator adding exponential-backoff retries to a sync callable."""
-
-    def decorator(func: Callable[P, T]) -> Callable[P, T]:
-        retrier = tenacity.Retrying(
-            stop=tenacity.stop_after_attempt(attempts),
-            wait=tenacity.wait_exponential(multiplier=initial_wait, max=max_wait),
-            retry=_retry_predicate(),
-            reraise=True,
-        )
-
-        def wrapper(*args: P.args, **kwargs: P.kwargs) -> T:
-            return retrier(func, *args, **kwargs)
-
-        wrapper.__name__ = getattr(func, "__name__", "retry_wrapper")
-        return wrapper
-
-    return decorator
-
-
 def call_with_retry[**P, T](
     func: Callable[P, T],
     *args: P.args,

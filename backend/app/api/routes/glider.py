@@ -49,3 +49,26 @@ async def mission_profiles(mission_id: str, request: Request) -> GliderNotConfig
     if isinstance(result, GliderNotConfigured):
         return result
     return GliderNotConfigured(detail=str(result))
+
+
+# --- Collection-style aliases (stable names for future providers) ------------
+
+
+@router.get(
+    "s",  # "/gliders" — alias of /glider/missions
+    response_model=GliderNotConfigured,
+    summary="List gliders (alias of /glider/missions)",
+    include_in_schema=False,
+)
+async def list_gliders(request: Request) -> GliderNotConfigured:
+    return await missions(request)
+
+
+@router.get(
+    "s/{glider_id}",  # "/gliders/{id}" — alias of mission profiles
+    response_model=GliderNotConfigured,
+    summary="One glider (alias of /glider/missions/{id}/profiles)",
+    include_in_schema=False,
+)
+async def get_glider(glider_id: str, request: Request) -> GliderNotConfigured:
+    return await mission_profiles(glider_id, request)

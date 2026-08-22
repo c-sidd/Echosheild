@@ -104,10 +104,46 @@ def test_upstream_failure_maps_to_domain_error(monkeypatch: pytest.MonkeyPatch, 
         client.search_floats()
 
 
+def test_region_box_meets_argopy_minimum(
+    monkeypatch: pytest.MonkeyPatch,
+    settings,  # noqa: ANN001 - Settings fixture
+) -> None:
+    """argopy rejects region boxes with <6 elements; depths must always ride along."""
+    captured: dict[str, list[float]] = {}
+    frame = _fake_point_dataset(n_prof=2).to_dataframe().reset_index()
+
+    def spy_fetch(self: ArgoClient, box: list[float]) -> pd.DataFrame:
+        captured["box"] = list(box)
+        return frame.copy()
+
+    monkeypatch.setattr(ArgoClient, "_fetch_region", spy_fetch)
+    client = ArgoClient(settings)
+
+    client.search_floats(max_floats=5)
+    assert len(captured["box"]) == 6  # lon0 lon1 lat0 lat1 depth0 depth1
+    assert captured["box"][4] == 0 and captured["box"][5] == 2000
+
+    client.search_floats(start="2024-01-01", end="2024-02-01", max_floats=5)
+    assert len(captured["box"]) == 8
+
+
+def test_argo_api_returns_503_when_upstream_down(
+    client,  # noqa: ANN001 - TestClient fixture
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The API degrades gracefully: argopy failure must never crash the app."""
+
+    def boom(*args: object, **kwargs: object) -> object:
+        raise TimeoutError("erddap unreachable")
+
+    monkeypatch.setattr("app.ingestion.argo_client._create_fetcher", boom)
+    response = client.get("/api/v1/argo/floats")
+    assert response.status_code == 503
+    assert "upstream unavailable" in response.json()["detail"]
+
+
 def test_empty_region_raises_clear_error(monkeypatch: pytest.MonkeyPatch, settings) -> None:
-    empty_frame = (
-        _fake_point_dataset(n_prof=0).to_dataframe().reset_index() if False else pd.DataFrame()
-    )
+    empty_frame = pd.DataFrame()
     monkeypatch.setattr(
         "app.ingestion.argo_client._create_fetcher",
         lambda *a, **k: FakeFetcher(empty_frame),

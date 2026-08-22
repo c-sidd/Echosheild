@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
 from pathlib import Path
 
@@ -83,9 +84,8 @@ def test_discover_datasets_parses_catalog(
         update={"THREDDS_CATALOG_URL": "http://thredds:8080/thredds/catalog.xml"}
     )
     client = ThreddsClient(configured)
-    import asyncio
 
-    entries = asyncio.get_event_loop().run_until_complete(client.discover_datasets())
+    entries = asyncio.run(client.discover_datasets())
     assert len(entries) == 2
     assert isinstance(entries[0], CatalogDataset)
     assert entries[0].id == "incois_sst.nc"
@@ -102,19 +102,16 @@ def test_catalog_http_error_propagates(monkeypatch: pytest.MonkeyPatch, settings
         update={"THREDDS_CATALOG_URL": "http://thredds:8080/catalog.xml"}
     )
     client = ThreddsClient(configured)
-    import asyncio
 
     with pytest.raises(Exception):  # noqa: B017 - tenacity reraises original
-        asyncio.get_event_loop().run_until_complete(client.discover_datasets())
+        asyncio.run(client.discover_datasets())
 
 
 def test_no_catalog_configured_raises(settings: Settings) -> None:
     client = ThreddsClient(settings)
     assert client.configured is False
-    import asyncio
-
     with pytest.raises(ThreddsClientError, match="no THREDDS catalog"):
-        asyncio.get_event_loop().run_until_complete(client.discover_datasets())
+        asyncio.run(client.discover_datasets())
 
 
 def test_circuit_breaker_opens_after_failures(
@@ -132,19 +129,18 @@ def test_circuit_breaker_opens_after_failures(
         update={"THREDDS_CATALOG_URL": "http://thredds:8080/catalog.xml"}
     )
     client = ThreddsClient(configured)
-    import asyncio
 
     async def attempt() -> None:
         await client.fetch_catalog_xml("http://thredds:8080/catalog.xml")
 
     for _ in range(5):
         with contextlib.suppress(Exception):
-            asyncio.get_event_loop().run_until_complete(attempt())
+            asyncio.run(attempt())
     assert client._circuit.state.value == "open"
     # Once open, requests are rejected without hitting the network.
     before = calls["count"]
     with contextlib.suppress(Exception):
-        asyncio.get_event_loop().run_until_complete(attempt())
+        asyncio.run(attempt())
     assert calls["count"] == before
 
 

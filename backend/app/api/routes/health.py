@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib.util
 import time
 
 import httpx
@@ -14,12 +15,33 @@ from app.models.schemas import DependencyStatus, HealthStatus, ReadinessStatus
 
 router = APIRouter(prefix="/health", tags=["health"])
 
+# Scientific packages the deployment may rely on; checked via importlib spec
+# lookup so liveness never triggers heavy imports or side effects.
+_OPTIONAL_DEPENDENCIES = ("xarray", "netCDF4", "h5netcdf", "pydap", "argopy")
+
+
+def _optional_dependency_status() -> dict[str, str]:
+    """Report whether each optional scientific package is importable."""
+    status: dict[str, str] = {}
+    for module in _OPTIONAL_DEPENDENCIES:
+        try:
+            found = importlib.util.find_spec(module) is not None
+        except (ImportError, ValueError):
+            status[module] = "error"
+        else:
+            status[module] = "available" if found else "missing"
+    return status
+
 
 @router.get(
     "",
     response_model=HealthStatus,
     summary="Liveness probe",
-    description="Basic liveness information for the EchoShield backend.",
+    description=(
+        "Basic liveness information for the EchoShield backend, including"
+        " optional scientific-dependency availability and whether THREDDS is"
+        " configured. Live THREDDS connectivity is probed by /health/ready."
+    ),
 )
 async def health() -> HealthStatus:
     settings = get_settings()
@@ -28,6 +50,8 @@ async def health() -> HealthStatus:
         service=settings.APP_NAME,
         version=__version__,
         environment=settings.APP_ENV,
+        optional_dependencies=_optional_dependency_status(),
+        thredds_configured=bool(settings.THREDDS_BASE_URL or settings.THREDDS_CATALOG_URL),
     )
 
 

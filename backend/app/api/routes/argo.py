@@ -30,7 +30,7 @@ def _client(request: Request) -> ArgoClient:
     ),
     responses={503: {"description": "Argo upstream unavailable"}},
 )
-async def search_floats(
+def search_floats(
     request: Request,
     lon_min: float = Query(default=50.0, ge=-180, le=180),
     lon_max: float = Query(default=100.0, ge=-180, le=180),
@@ -67,7 +67,7 @@ async def search_floats(
         503: {"description": "Argo upstream unavailable"},
     },
 )
-async def float_detail(
+def float_detail(
     float_id: int,
     request: Request,
     max_profiles: int = Query(default=5, ge=1, le=20),
@@ -89,7 +89,7 @@ async def float_detail(
         503: {"description": "Argo upstream unavailable"},
     },
 )
-async def float_profile(
+def float_profile(
     float_id: int,
     request: Request,
     cycle: int | None = Query(default=None, ge=0),
@@ -110,7 +110,7 @@ async def float_profile(
     description="Alias of ``/floats`` kept for frontend convenience.",
     responses={503: {"description": "Argo upstream unavailable"}},
 )
-async def search_alias(
+def search_alias(
     request: Request,
     lon_min: float = Query(default=50.0, ge=-180, le=180),
     lon_max: float = Query(default=100.0, ge=-180, le=180),

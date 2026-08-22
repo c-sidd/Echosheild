@@ -59,7 +59,7 @@ def _parse_bbox(
         " THREDDS catalog entries when a THREDDS server is configured."
     ),
 )
-async def list_datasets(request: Request) -> list[DatasetInfo]:
+def list_datasets(request: Request) -> list[DatasetInfo]:
     return _service(request).list_datasets()
 
 
@@ -73,7 +73,7 @@ async def list_datasets(request: Request) -> list[DatasetInfo]:
         503: {"description": "Remote dataset unavailable"},
     },
 )
-async def get_metadata(dataset_id: str, request: Request) -> DatasetMetadata:
+def get_metadata(dataset_id: str, request: Request) -> DatasetMetadata:
     return _service(request).get_metadata(dataset_id)
 
 
@@ -83,7 +83,7 @@ async def get_metadata(dataset_id: str, request: Request) -> DatasetMetadata:
     summary="List dataset variables",
     responses={404: {"description": "Unknown dataset"}},
 )
-async def list_variables(dataset_id: str, request: Request) -> list[VariableMetadata]:
+def list_variables(dataset_id: str, request: Request) -> list[VariableMetadata]:
     return _service(request).list_variables(dataset_id)
 
 
@@ -94,7 +94,7 @@ async def list_variables(dataset_id: str, request: Request) -> list[VariableMeta
     description="First/last timestep (ISO-8601) and the number of timesteps.",
     responses={404: {"description": "Unknown dataset"}},
 )
-async def get_times(dataset_id: str, request: Request) -> TimeRange:
+def get_times(dataset_id: str, request: Request) -> TimeRange:
     times = _service(request).get_times(dataset_id)
     if not times:
         raise ValueError(f"dataset {dataset_id!r} has no time coordinate")
@@ -107,7 +107,7 @@ async def get_times(dataset_id: str, request: Request) -> TimeRange:
     summary="Depth levels (meters)",
     responses={404: {"description": "Unknown dataset"}},
 )
-async def get_depths(dataset_id: str, request: Request) -> list[float]:
+def get_depths(dataset_id: str, request: Request) -> list[float]:
     depths = _service(request).get_depths_meters(dataset_id)
     if not depths:
         raise ValueError(f"dataset {dataset_id!r} has no depth coordinate")
@@ -128,7 +128,7 @@ async def get_depths(dataset_id: str, request: Request) -> list[float]:
         422: {"description": "Invalid parameters"},
     },
 )
-async def read_slice(
+def read_slice(
     dataset_id: str,
     request: Request,
     variable: str = Query(..., examples=["temperature"]),
@@ -157,7 +157,7 @@ async def read_slice(
     summary="Vertical profile at nearest grid point",
     responses={404: {"description": "Unknown dataset or variable"}},
 )
-async def read_profile(
+def read_profile(
     dataset_id: str,
     request: Request,
     variable: str = Query(..., examples=["temperature"]),
@@ -180,7 +180,7 @@ async def read_profile(
     summary="Point sample for one or more variables",
     responses={404: {"description": "Unknown dataset or variable"}},
 )
-async def read_point(
+def read_point(
     dataset_id: str,
     request: Request,
     variables: str = Query(
@@ -210,7 +210,7 @@ async def read_point(
     summary="Horizontal current vector field (u, v)",
     responses={404: {"description": "Unknown dataset or no (u, v) pair"}},
 )
-async def read_currents(
+def read_currents(
     dataset_id: str,
     request: Request,
     time_index: int | None = Query(default=None, ge=0),
@@ -242,7 +242,7 @@ async def read_currents(
         503: {"description": "Metadata-only dataset"},
     },
 )
-async def get_services(dataset_id: str, request: Request) -> ServiceEndpoints:
+def get_services(dataset_id: str, request: Request) -> ServiceEndpoints:
     entry: RegisteredDataset = request.app.state.registry.get(dataset_id)
     services = entry.info.services
     if services is None:

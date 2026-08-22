@@ -110,14 +110,12 @@ class ArgoClient:
         max_floats: int = 50,
     ) -> list[ArgoFloatSummary]:
         """Search floats in a geographic box (optionally time-bounded)."""
-        box = [lon_min, lon_max, lat_min, lat_max]
-        time_bounds: list[Any] = []
+        # argopy requires 6 elements (lon0 lon1 lat0 lat1 depth0 depth1),
+        # optionally +2 time bounds -> 8.
+        box: list[Any] = [lon_min, lon_max, lat_min, lat_max, 0, 2000]
         if start:
-            time_bounds.append(pd.Timestamp(start))
-            time_bounds.append(pd.Timestamp(end) if end else pd.Timestamp.utcnow())
-        if len(time_bounds) == 2:
-            box.extend([0, 2000])  # depth range
-            box.extend(time_bounds)
+            end_value = pd.Timestamp(end) if end else pd.Timestamp.now("UTC").tz_localize(None)
+            box.extend([pd.Timestamp(start), end_value])
 
         cache_key = f"search:{box}:{max_floats}"
         payload = self._cache.get(cache_key)

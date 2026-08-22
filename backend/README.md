@@ -46,12 +46,15 @@ Full stack with THREDDS:
 docker compose -f infra/docker-compose.yml up -d --build
 ```
 
-## API overview (`/api/v1`)
+## API
+
+Interactive schema: `/docs` (Swagger) · `/redoc` · `/openapi.json`.
+Frontend integration contract: [`docs/api-contract.md`](../docs/api-contract.md). overview (`/api/v1`)
 
 | Endpoint | Purpose |
 |---|---|
-| `GET /health` | Liveness: status, service, version, environment |
-| `GET /health/ready` | Readiness checks (data dir, registry, THREDDS/ERDDAP probes) |
+| `GET /health` | Liveness: status, service, version, environment, optional-dependency availability (`xarray`/`netCDF4`/`argopy`/…), THREDDS-configured flag |
+| `GET /health/ready` | Readiness checks (data dir, registry, THREDDS/ERDDAP connectivity probes) |
 | `GET /model/datasets` | Registered datasets (local files, ISO 19115 discoveries, THREDDS) |
 | `GET /model/{id}/metadata` | Dimensions, variables, coordinates, time/depth ranges |
 | `GET /model/{id}/variables` | Variable discovery |
@@ -65,9 +68,14 @@ docker compose -f infra/docker-compose.yml up -d --build
 | `GET /argo/floats?lon_min&lon_max&lat_min&lat_max` | Argo float search (Indian Ocean default) |
 | `GET /argo/{wmo}` · `GET /argo/{wmo}/profile?cycle=n` | Float detail / single profile |
 | `GET /glider/status` · `/glider/missions` | Explicit `not_configured` until a source exists |
+| `GET /gliders` · `/gliders/{glider_id}` | Collection-style aliases of the glider API |
 
 Errors are mapped consistently: unknown dataset/variable/cycle → **404**,
 invalid parameters → **422**, upstream scientific service failure → **503**.
+
+The versioned prefix is configurable via `API_V1_PREFIX`; with the default
+`/api/v1`, the paths above resolve to `/api/v1/health`,
+`/api/v1/model/datasets`, etc.
 
 ## Dataset registration & security
 
@@ -105,7 +113,7 @@ response-size limits (`MAX_DATA_POINTS`, `MAX_PROFILE_POINTS`,
 
 ```bash
 cd backend
-uv run pytest            # 64 tests (external services mocked)
+uv run pytest            # 69 tests (external services mocked)
 uv run ruff check .
 uv run ruff format --check .
 uv run mypy app          # strict mode

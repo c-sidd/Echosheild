@@ -18,7 +18,7 @@ from pathlib import Path
 from app.core.config import Settings
 from app.ingestion.iso19115_parser import scan_metadata_directory
 from app.ingestion.thredds_client import ThreddsClient, build_erddap_griddap_urls
-from app.models.schemas import DatasetInfo, SpatialBounds, TimeRange
+from app.models.schemas import DatasetInfo, TimeRange
 
 _LOG = logging.getLogger("echoshield.registry")
 
@@ -200,7 +200,3 @@ class DatasetRegistry:
             known = ", ".join(sorted(self._datasets)[:10]) or "(none)"
             raise KeyError(f"unknown dataset_id {dataset_id!r}; registered: {known}")
         return entry
-
-
-def bounds_from_record(south: float, north: float, west: float, east: float) -> SpatialBounds:
-    return SpatialBounds(south=south, north=north, west=west, east=east)
