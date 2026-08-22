@@ -11,7 +11,9 @@ import xarray as xr
 
 from app.core.config import Settings
 from app.ingestion import netcdf_parser as ncp
+from app.ingestion.variable_mapping import classify_dataset_variables
 from app.models.schemas import (
+    CurrentsUnavailable,
     CurrentVectorField,
     DatasetInfo,
     DatasetMetadata,
@@ -24,9 +26,6 @@ from app.models.schemas import (
 from app.services.dataset_registry import DatasetRegistry, RegisteredDataset
 
 _LOG = logging.getLogger("echoshield.model")
-
-_U_CANDIDATES = ("u", "uo", "usurf", "eastward_velocity", "u_current", "u_velocity")
-_V_CANDIDATES = ("v", "vo", "vsurf", "northward_velocity", "v_current", "v_velocity")
 
 
 class DatasetNotAccessibleError(RuntimeError):
@@ -105,6 +104,8 @@ class ModelDataService:
             source_type=entry.info.source_type,
         )
         metadata.services = entry.info.services
+        metadata.provider = entry.info.provider
+        metadata.license = entry.info.license
         return metadata
 
     def list_variables(self, dataset_id: str) -> list[VariableMetadata]:
@@ -206,8 +207,14 @@ class ModelDataService:
         time_index: int | None,
         depth_meters: float | None,
         bbox: tuple[float, float, float, float] | None,
-    ) -> CurrentVectorField:
-        u_name, v_name = self.detect_current_variables(dataset_id)
+    ) -> CurrentVectorField | CurrentsUnavailable:
+        detected = self.detect_current_variables(dataset_id)
+        if detected is None:
+            return CurrentsUnavailable(
+                dataset_id=dataset_id,
+                reason="Current vector variables are not available in this dataset.",
+            )
+        u_name, v_name = detected
         ds = self._open(self._registry.get(dataset_id))
         u_slice = ncp.read_slice(
             ds,
@@ -249,12 +256,17 @@ class ModelDataService:
             max_speed_ms=round(max_speed**0.5, 6) if max_speed is not None else None,
         )
 
-    def detect_current_variables(self, dataset_id: str) -> tuple[str, str]:
-        variables = {v.name.lower(): v.name for v in self.list_variables(dataset_id)}
-        u_name = next((variables[c] for c in _U_CANDIDATES if c in variables), None)
-        v_name = next((variables[c] for c in _V_CANDIDATES if c in variables), None)
+    def detect_current_variables(self, dataset_id: str) -> tuple[str, str] | None:
+        """Return the ``(u, v)`` source-variable pair, or ``None``.
+
+        Detection is metadata-driven (CF standard names first, then known
+        naming conventions). Datasets that genuinely lack currents yield
+        ``None`` — no data is ever fabricated.
+        """
+        ds = self._open(self._registry.get(dataset_id))
+        canonical = classify_dataset_variables(ds)
+        u_name = canonical.get("u_current")
+        v_name = canonical.get("v_current")
         if u_name is None or v_name is None:
-            raise KeyError(
-                f"dataset {dataset_id!r} does not expose a recognised (u, v) current pair"
-            )
+            return None
         return u_name, v_name

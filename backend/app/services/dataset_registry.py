@@ -16,7 +16,11 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from app.core.config import Settings
-from app.ingestion.iso19115_parser import scan_metadata_directory
+from app.ingestion.iso19115_parser import (
+    IsoDatasetRecord,
+    parse_iso19115_file,
+    scan_metadata_directory,
+)
 from app.ingestion.thredds_client import ThreddsClient, build_erddap_griddap_urls
 from app.models.schemas import DatasetInfo, TimeRange
 
@@ -59,25 +63,71 @@ class DatasetRegistry:
         if existing is None or not existing.accessible:
             self._datasets[entry.info.id] = entry
 
+    def _local_roots(self) -> list[Path]:
+        roots = [self._settings.netcdf_data_root]
+        for candidate in (self._settings.argo_cache_dir, self._settings.glider_cache_dir):
+            if candidate not in roots:
+                roots.append(candidate)
+        return [root for root in roots if root.is_dir()]
+
+    def _sidecar_record(self, nc_file: Path) -> IsoDatasetRecord | None:
+        """Associate ``<stem>_iso19115.xml`` metadata with a NetCDF file."""
+        stem = nc_file.stem.lower()
+        search_dirs = {nc_file.parent, self._settings.metadata_root}
+        for directory in search_dirs:
+            if not directory.is_dir():
+                continue
+            for xml_path in sorted(directory.glob("*iso19115*.xml")):
+                xml_stem = xml_path.name.lower().replace("_iso19115.xml", "")
+                if xml_stem == stem or xml_path.stem.lower() == stem:
+                    record = parse_iso19115_file(xml_path)
+                    if record is not None:
+                        return record
+        return None
+
+    def _probe_readable(self, nc_file: Path) -> bool:
+        """Cheap header check so corrupt files never break discovery."""
+        try:
+            import xarray as xr
+
+            ds = xr.open_dataset(nc_file, decode_times=False)
+            ds.close()
+            return True
+        except Exception as exc:  # noqa: BLE001 - corrupt/unreadable files are isolated
+            _LOG.warning("dataset_skipped_unreadable file=%s error=%s", nc_file.name, exc)
+            return False
+
     def _discover_local_netcdf(self) -> int:
-        root = self._settings.netcdf_data_root
-        if not root.is_dir():
-            return 0
         count = 0
-        for nc_file in sorted(root.glob("*.nc")):
-            dataset_id = f"local_{nc_file.stem}"
-            self._register(
-                RegisteredDataset(
-                    info=DatasetInfo(
-                        id=dataset_id,
-                        title=nc_file.stem.replace("_", " ").title(),
-                        summary=f"Local sample NetCDF file ({nc_file.name}).",
-                        source_type="local",
+        seen_ids: set[str] = set()
+        for root in self._local_roots():
+            for nc_file in sorted(root.glob("*.nc")):
+                if not self._probe_readable(nc_file):
+                    continue
+                dataset_id = f"local_{nc_file.stem}"
+                if dataset_id in seen_ids:
+                    # Deterministic de-confliction across cache directories.
+                    dataset_id = f"local_{root.name}_{nc_file.stem}"
+                if dataset_id in seen_ids:
+                    continue
+                seen_ids.add(dataset_id)
+
+                sidecar = self._sidecar_record(nc_file)
+                info = DatasetInfo(
+                    id=dataset_id,
+                    title=(sidecar.title if sidecar else nc_file.stem.replace("_", " ").title()),
+                    summary=(
+                        sidecar.summary
+                        if sidecar and sidecar.summary
+                        else f"Local sample NetCDF file ({nc_file.name})."
                     ),
-                    local_path=nc_file,
+                    source_type="local",
+                    provider=sidecar.provider if sidecar else None,
+                    license=sidecar.use_limitation if sidecar else None,
+                    metadata_path=sidecar.source_file if sidecar else None,
                 )
-            )
-            count += 1
+                self._register(RegisteredDataset(info=info, local_path=nc_file))
+                count += 1
         return count
 
     def _discover_iso19115(self) -> int:
@@ -93,6 +143,11 @@ class DatasetRegistry:
                 if record.time_start and record.time_end
                 else None
             )
+            common = {
+                "provider": record.provider,
+                "license": record.use_limitation,
+                "metadata_path": record.source_file,
+            }
             if record.services.erddap_griddap:
                 entry = RegisteredDataset(
                     info=DatasetInfo(
@@ -106,6 +161,7 @@ class DatasetRegistry:
                             record.services.erddap_griddap.rsplit("/griddap/", 1)[0],
                             record.dataset_id,
                         ),
+                        **common,  # type: ignore[arg-type]
                     ),
                     remote_url=record.services.erddap_griddap,
                     engine="pydap",
@@ -122,6 +178,7 @@ class DatasetRegistry:
                         services=record.services.model_copy(
                             update={"dataset_id": record.dataset_id}
                         ),
+                        **common,  # type: ignore[arg-type]
                     ),
                     remote_url=record.services.opendap,
                     engine="pydap",
@@ -140,6 +197,7 @@ class DatasetRegistry:
                         services=record.services.model_copy(
                             update={"dataset_id": record.dataset_id}
                         ),
+                        **common,  # type: ignore[arg-type]
                     )
                 )
             self._register(entry)
@@ -190,6 +248,10 @@ class DatasetRegistry:
         loop.create_task(self.discover_thredds_async())
 
     # -- lookup --------------------------------------------------------------
+
+    def entries(self) -> list[RegisteredDataset]:
+        """Full registration records (including access paths)."""
+        return list(self._datasets.values())
 
     def list(self) -> list[DatasetInfo]:
         return [entry.info for entry in self._datasets.values()]

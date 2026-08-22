@@ -19,7 +19,7 @@ Interactive schema: `/docs` (Swagger UI), `/redoc`, `/openapi.json`.
 | Missing values | Never NaN/Inf — always JSON `null` |
 | Longitudes | `-180..180` (inputs accept up to `360`) |
 | Latitudes | `-90..90` |
-| Depths | meters, positive down |
+| Vertical axis | `vertical_kind` on responses: `"depth"` (meters), `"pressure"` (native dbar — never silently converted) or `"other"` |
 | Blocking safety | Data handlers run in the worker threadpool; a slow upstream never stalls unrelated requests |
 
 ## 2. Error contract
@@ -39,7 +39,7 @@ current selection.
 
 ## 3. Health
 
-### `GET /health`
+### `GET /health` (i.e. `/api/v1/health`)
 Liveness + environment report.
 
 ```json
@@ -66,7 +66,10 @@ frontend "system status" widgets.
 
 ### `GET /model/datasets` → `DatasetInfo[]`
 Registered datasets: local NetCDF samples, INCOIS ERDDAP products (discovered
-from ISO 19115 metadata), THREDDS catalog entries when configured.
+from ISO 19115 metadata), cached Argo/Glider NetCDF files, and THREDDS catalog
+entries when configured. Provenance fields `provider`, `license`,
+`metadata_path` are populated when a sidecar ISO record or file attributes
+supply them.
 
 ```json
 [
@@ -77,41 +80,55 @@ from ISO 19115 metadata), THREDDS catalog entries when configured.
     "source_type": "local",
     "time_range": {"start": "2024-01-01T00:00:00", "end": "2024-01-08T00:00:00", "count": 8},
     "spatial_bounds": {"west": 60.0, "east": 70.0, "south": 5.0, "north": 10.0},
-    "services": null
+    "services": null,
+    "provider": null,
+    "license": null,
+    "enabled": true
   }
 ]
 ```
 
 ### `GET /model/{dataset_id}/metadata` → `DatasetMetadata`
-Dimensions dict, variable list (`name`, `long_name`, `standard_name`, `units`,
-`dimensions`, `shape`), coordinates, global attributes, time/depth ranges,
-spatial bounds, service endpoints when available.
+Dimensions dict, variable list (`name`, `canonical_name`, `long_name`,
+`standard_name`, `units`, `dimensions`, `shape`), coordinates, global
+attributes, time/depth ranges, spatial bounds, service endpoints when
+available, plus `coordinate_mapping` — the resolved coordinate variables,
+e.g. `{"time": "TAXIS", "latitude": "YAXIS", "longitude": "XAXIS",
+"pressure": "ZAX"}` for INCOIS-style files.
 
 ### `GET /model/{dataset_id}/variables` → `VariableMetadata[]`
+Each variable carries `canonical_name` — the EchoShield canonical category
+(`temperature`, `salinity`, `u_current`, `v_current`, `chlorophyll`, …) or
+`null` when the variable has no canonical mapping.
 
 ### `GET /model/{dataset_id}/times` → `{start, end, count}`
 
 ### `GET /model/{dataset_id}/depths` → `float[]`
-Depth levels in meters (positive down), e.g. `[0.0, 10.0, 20.0, 50.0, 100.0]`.
+Vertical axis values in **native units** — meters for `vertical_kind:"depth"`,
+dbar for `"pressure"` (no conversion applied). Interpret via
+`metadata.coordinate_mapping` / slice responses, e.g. `[0.0, 10.0, 20.0]`.
 
 ### `GET /model/{dataset_id}/slice` → `ModelSlice`
 One horizontal 2-D field — the primary feed for 2-D rendering / volume slicing.
 
 | Param | Type | Notes |
 | --- | --- | --- |
-| `variable` | str, required | e.g. `temperature`, `salinity` |
+| `variable` | str, required | e.g. `temperature`, `salinity`, or any source name (INCOIS `TEMP`, `SAL`, …) |
 | `time_index` | int ≥ 0 | defaults to 0 |
-| `depth` | float | nearest depth level (meters); omit for surface |
+| `depth` | float | nearest vertical level; units follow `vertical_kind` (meters for depth, dbar for pressure) |
 | `west`,`east`,`south`,`north` | float | optional bbox; **all four required together** |
 
 ```json
 {
   "dataset_id": "local_synthetic_ocean",
   "variable": "temperature",
+  "canonical_name": "temperature",
   "units": "degC",
   "time_index": 0,
   "time": "2024-01-01T00:00:00",
   "depth_meters": 0.0,
+  "vertical_kind": "depth",
+  "vertical_units": "m",
   "latitude": [5.0, 6.0],
   "longitude": [60.0, 61.0],
   "values": [[27.1, 27.2], [26.9, null]],
@@ -122,18 +139,25 @@ One horizontal 2-D field — the primary feed for 2-D rendering / volume slicing
 **Grid orientation:** `values[i][j]` is row `latitude[i]`, column
 `longitude[j]`. Grids larger than `MAX_GRID_POINTS` (100 000) are
 automatically downsampled; the applied strides are reported in
-`downsampling` (e.g. `{"latitude_step": 2, "longitude_step": 2}`).
+`downsampling` (e.g. `{"latitude_stride": 2, "longitude_stride": 2}`).
+
+**Vertical axis honesty:** `vertical_kind` is `"depth"` (values in meters),
+`"pressure"` (values in native pressure units, e.g. dbar — *no silent
+conversion*), or `"other"`. INCOIS products whose vertical axis is pressure
+(e.g. `ZAX` in dbar) are reported as `"pressure"`.
 
 ### `GET /model/{dataset_id}/profile` → `OceanProfile`
 Vertical profile at the nearest grid point. Params: `variable` (required),
 `latitude`, `longitude` (required), `time_index`. Returns parallel arrays
-`depths_meters[]` and `values[]` (null where missing). Capped at
-`MAX_PROFILE_POINTS` (500).
+`depths_meters[]` and `values[]` (null where missing), plus
+`vertical_kind`/`vertical_units` describing the axis and `canonical_name`
+for the variable. Capped at `MAX_PROFILE_POINTS` (500).
 
 ### `GET /model/{dataset_id}/point` → `PointSample`
 Multi-variable sample for hover popups / inspector panels. Params:
 `variables` (comma-separated, 1–8 names), `latitude`, `longitude`,
-optional `time_index`, `depth`.
+optional `time_index`, `depth`. The `values` map keys are the canonical
+variable categories when a mapping exists, else source names.
 
 ```json
 {
@@ -146,15 +170,25 @@ optional `time_index`, `depth`.
 }
 ```
 
-### `GET /model/{dataset_id}/currents` → `CurrentVectorField`
+### `GET /model/{dataset_id}/currents` → `CurrentVectorField | CurrentsUnavailable`
 Horizontal u/v vector field for flow overlays. Params: `time_index`,
-`depth`, optional bbox. Variable auto-detection accepts common naming
-families (`u/v`, `uo/vo`, `usurf/vsurf`, `eastward_velocity/…`,
-`u_current/…`). Response adds `max_speed_ms` for color-scale normalization;
-grids are decimated to half of `MAX_GRID_POINTS` per component.
+`depth`, optional bbox. Detection is **metadata-driven**: the (u, v) pair is
+resolved from canonical variable mapping (`u`/`v`, `uo`/`vo`,
+`usurf`/`vsurf`, `eastward_velocity`/…, INCOIS-style names). Datasets
+without currents return **200** with an explicit unavailability contract —
+never fabricated data:
+
+```json
+{"dataset_id": "local_temp_only", "available": false, "reason": "no current velocity pair detected in dataset variables"}
+```
+
+When available, the response adds `max_speed_ms` for color-scale
+normalization; grids are decimated to half of `MAX_GRID_POINTS` per
+component.
 
 ```json
 {
+  "available": true,
   "dataset_id": "local_synthetic_ocean",
   "u_variable": "u", "v_variable": "v", "units": "m s-1",
   "time": "2024-01-01T00:00:00", "depth_meters": 0.0,
@@ -173,8 +207,10 @@ payloads — the frontend should hand these URLs directly to map/tile layers.
 
 ## 5. Argo observations (`/argo`)
 
-Requires a reachable Argo upstream (ERDDAP/GDAC via argopy). All failures are
-controlled 503s.
+Requires an Argo data source. `ARGO_PROVIDER` selects it: `local` (NetCDF
+profiles cached under `data/argo_cache/` — served with zero network access),
+`remote` (argopy → ERDDAP/GDAC), or `auto` (default: local when cache files
+exist, else remote). All upstream failures are controlled 503s.
 
 ### `GET /argo/floats` → `ArgoFloatSummary[]`
 Params: `lon_min=50`, `lon_max=100`, `lat_min=-10`, `lat_max=30`

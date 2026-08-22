@@ -152,6 +152,40 @@ def test_currents_endpoint(client: TestClient) -> None:
     assert payload["max_speed_ms"] is not None and payload["max_speed_ms"] >= 0
 
 
+def test_currents_unavailable_contract(client: TestClient, settings) -> None:  # noqa: ANN001
+    """Datasets without (u, v) return an explicit availability contract."""
+    import numpy as np
+    import xarray as xr
+    from fastapi.testclient import TestClient
+
+    from app.main import create_app
+
+    temp_only_path = settings.NETCDF_DATA_ROOT / "temp_only.nc"
+    ds = xr.Dataset(
+        {
+            "temperature": (
+                ("time", "depth", "latitude", "longitude"),
+                np.zeros((2, 2, 2, 2), dtype="float32"),
+            ),
+        },
+        coords={
+            "time": np.array(["2024-01-01", "2024-01-02"], dtype="datetime64[ns]"),
+            "depth": [0.0, 10.0],
+            "latitude": [5.0, 6.0],
+            "longitude": [60.0, 61.0],
+        },
+    )
+    temp_only_path.parent.mkdir(parents=True, exist_ok=True)
+    ds.to_netcdf(temp_only_path)
+
+    with TestClient(create_app(settings)) as temp_client:
+        response = temp_client.get("/api/v1/model/local_temp_only/currents")
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["available"] is False
+        assert "not available" in payload["reason"]
+
+
 def test_services_metadata_only_dataset_503(client: TestClient) -> None:
     # The synthetic local dataset has no THREDDS/WMS services configured.
     response = client.get(f"/api/v1/model/{DATASET}/services")

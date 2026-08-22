@@ -17,6 +17,16 @@ DatasetSourceType = Literal[
     "erddap_tabledap",
 ]
 
+VerticalKind = Literal["depth", "pressure", "other"]
+
+
+class CurrentsUnavailable(BaseModel):
+    """Explicit response when a dataset has no current-vector variables."""
+
+    dataset_id: str
+    available: Literal[False] = False
+    reason: str
+
 
 class CoordinateMetadata(BaseModel):
     name: str
@@ -29,6 +39,7 @@ class CoordinateMetadata(BaseModel):
 
 class VariableMetadata(BaseModel):
     name: str
+    canonical_name: str | None = None
     long_name: str | None = None
     standard_name: str | None = None
     units: str | None = None
@@ -43,10 +54,20 @@ class TimeRange(BaseModel):
 
 
 class DepthRange(BaseModel):
+    """Vertical extent.
+
+    ``vertical_kind`` distinguishes true depth (meters) from pressure
+    coordinates (e.g. dbar). When ``vertical_kind == "pressure"`` the
+    ``min_meters`` / ``max_meters`` fields carry *pressure* values in
+    ``vertical_units`` — no silent unit conversion is applied.
+    """
+
     min_meters: float
     max_meters: float
     count: int
     positive_down: bool = True
+    vertical_kind: VerticalKind = "depth"
+    vertical_units: str | None = None
 
 
 class SpatialBounds(BaseModel):
@@ -72,6 +93,10 @@ class DatasetInfo(BaseModel):
     title: str
     summary: str | None = None
     source_type: DatasetSourceType = "local"
+    provider: str | None = None
+    license: str | None = None
+    enabled: bool = True
+    metadata_path: str | None = None
     time_range: TimeRange | None = None
     spatial_bounds: SpatialBounds | None = None
     services: ServiceEndpoints | None = None
@@ -82,9 +107,13 @@ class DatasetMetadata(BaseModel):
     title: str
     summary: str | None = None
     source_type: DatasetSourceType = "local"
+    provider: str | None = None
+    license: str | None = None
     dimensions: dict[str, int]
     variables: list[VariableMetadata]
     coordinates: list[CoordinateMetadata]
+    # canonical -> source coordinate name (e.g. {"time": "TAXIS", ...})
+    coordinate_mapping: dict[str, str] = Field(default_factory=dict)
     global_attributes: dict[str, Any] = Field(default_factory=dict)
     time_range: TimeRange | None = None
     depth_range: DepthRange | None = None
@@ -95,10 +124,15 @@ class DatasetMetadata(BaseModel):
 class ModelSlice(BaseModel):
     dataset_id: str
     variable: str
+    canonical_name: str | None = None
     units: str | None = None
     time_index: int | None = None
     time: str | None = None
     depth_meters: float | None = None
+    # ``vertical_kind`` documents whether depth_meters carries meters ("depth"),
+    # pressure values in vertical_units ("pressure"), or nothing ("other").
+    vertical_kind: VerticalKind | None = None
+    vertical_units: str | None = None
     latitude: list[float]
     longitude: list[float]
     # values[i][j] -> latitude i, longitude j (NaN-safe: missing cells are null)
@@ -109,11 +143,14 @@ class ModelSlice(BaseModel):
 class OceanProfile(BaseModel):
     dataset_id: str
     variable: str
+    canonical_name: str | None = None
     units: str | None = None
     latitude: float
     longitude: float
     time: str | None = None
     depths_meters: list[float]
+    vertical_kind: VerticalKind = "depth"
+    vertical_units: str | None = None
     values: list[float | None]
 
 
@@ -123,6 +160,8 @@ class PointSample(BaseModel):
     longitude: float
     time: str | None = None
     depth_meters: float | None = None
+    vertical_kind: VerticalKind = "depth"
+    vertical_units: str | None = None
     nearest_grid: dict[str, float] = Field(default_factory=dict)
     values: dict[str, float | None]
     units: dict[str, str | None]
@@ -130,6 +169,7 @@ class PointSample(BaseModel):
 
 class CurrentVectorField(BaseModel):
     dataset_id: str
+    available: Literal[True] = True
     u_variable: str
     v_variable: str
     units: str | None = None

@@ -5,6 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Query, Request
 
 from app.models.schemas import (
+    CurrentsUnavailable,
     CurrentVectorField,
     DatasetInfo,
     DatasetMetadata,
@@ -104,7 +105,12 @@ def get_times(dataset_id: str, request: Request) -> TimeRange:
 @router.get(
     "/{dataset_id}/depths",
     response_model=list[float],
-    summary="Depth levels (meters)",
+    summary="Vertical axis values (native units)",
+    description=(
+        "Values in native vertical units. Interpret them via"
+        " metadata.vertical_kind: 'depth' (meters), 'pressure' (e.g. dbar)"
+        " or 'other'. No unit conversion is applied."
+    ),
     responses={404: {"description": "Unknown dataset"}},
 )
 def get_depths(dataset_id: str, request: Request) -> list[float]:
@@ -206,9 +212,13 @@ def read_point(
 
 @router.get(
     "/{dataset_id}/currents",
-    response_model=CurrentVectorField,
+    response_model=CurrentVectorField | CurrentsUnavailable,
     summary="Horizontal current vector field (u, v)",
-    responses={404: {"description": "Unknown dataset or no (u, v) pair"}},
+    description=(
+        "Metadata-detected (u, v) pair. Datasets without currents return"
+        ' 200 with {"available": false, "reason": ...} — never fabricated data.'
+    ),
+    responses={404: {"description": "Unknown dataset"}},
 )
 def read_currents(
     dataset_id: str,
@@ -219,7 +229,7 @@ def read_currents(
     east: float | None = Query(default=None, ge=-180, le=360),
     south: float | None = Query(default=None, ge=-90, le=90),
     north: float | None = Query(default=None, ge=-90, le=90),
-) -> CurrentVectorField:
+) -> CurrentVectorField | CurrentsUnavailable:
     bbox = _parse_bbox(west, east, south, north)
     return _service(request).read_currents(
         dataset_id,

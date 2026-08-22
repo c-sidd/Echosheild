@@ -32,6 +32,8 @@ class IsoDatasetRecord:
     title: str
     summary: str | None = None
     source_file: str = ""
+    provider: str | None = None
+    use_limitation: str | None = None
     spatial_bounds: SpatialBounds | None = None
     time_start: str | None = None
     time_end: str | None = None
@@ -117,6 +119,23 @@ def _resource_url(element: ET.Element) -> str | None:
     return None
 
 
+def _provider_name(root: ET.Element) -> str | None:
+    """Responsible-party name from either ISO 19115-2005 or -1 structures.
+
+    ERDDAP's current exports use ``cit:CI_Organisation`` with a plain
+    CharacterString; older records use ``gmd:organisationName``.
+    """
+    for element in root.iter():
+        if _local_name(element) == "CI_Organisation":
+            for child in element.iter():
+                if _local_name(child) == "CharacterString":
+                    text = (child.text or "").strip()
+                    if text and "@" not in text:  # skip contact emails
+                        return text
+            break
+    return None
+
+
 def parse_iso19115_file(path: str | Path) -> IsoDatasetRecord | None:
     """Parse one ISO 19115 XML file; returns ``None`` when unusable."""
     try:
@@ -128,6 +147,10 @@ def parse_iso19115_file(path: str | Path) -> IsoDatasetRecord | None:
     identifier = _first_text(root, "fileIdentifier") or Path(path).stem
     title = _first_text(root, "title") or identifier
     summary = _first_text(root, "abstract")
+
+    # Provenance / licensing (best-effort, optional).
+    provider = _provider_name(root) or _first_text(root, "organisationName")
+    use_limitation = _first_text(root, "useLimitation")
 
     # Geographic bounding box.
     west = east = south = north = None
@@ -181,6 +204,8 @@ def parse_iso19115_file(path: str | Path) -> IsoDatasetRecord | None:
         title=title,
         summary=summary,
         source_file=str(Path(path).name),
+        provider=provider,
+        use_limitation=use_limitation,
         spatial_bounds=bounds,
         time_start=time_start,
         time_end=time_end,

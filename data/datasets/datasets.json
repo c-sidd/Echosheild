@@ -1,0 +1,257 @@
+{
+  "generated_by": "scripts/generate_dataset_manifest.py",
+  "dataset_count": 7,
+  "datasets": [
+    {
+      "id": "Indian_ARGO_Floats",
+      "title": "INDIAN ARGO Floats Data",
+      "provider": "INCOIS",
+      "description": "INDIAN ARGO Floats Data",
+      "source_type": "erddap_tabledap",
+      "format": "ISO-19115 metadata",
+      "local_path": null,
+      "metadata_path": "data/Indian_ARGO_Floats_iso19115.xml",
+      "enabled": true,
+      "license": "The data may be used and redistributed for free but is not intended\nfor legal use, since it may contain inaccuracies. Neither the data\nContributor, ERD, NOAA, nor the United States Government, nor any\nof their employees or contractors, makes any warranty, express or\nimplied, including warranties of merchantability and fitness for a\nparticular purpose, or assumes any legal liability for the accuracy,\ncompleteness, or usefulness, of this information.",
+      "services": {
+        "dataset_id": "Indian_ARGO_Floats",
+        "erddap_tabledap": "https://erddap.incois.gov.in/erddap/tabledap/Indian_ARGO_Floats"
+      },
+      "accessible": false,
+      "remote_only": true,
+      "note": "Registered from ISO 19115 metadata; the gridded NetCDF file is not stored locally and is accessed remotely when the upstream is reachable.",
+      "time_range": {
+        "start": "2002-10-24T19:50:18Z",
+        "end": "2025-04-23T13:50:45Z",
+        "count": 0
+      },
+      "spatial_bounds": {
+        "west": -179.98800659179688,
+        "east": 179.9029998779297,
+        "south": -69.73500061035156,
+        "north": 47.78333282470703
+      }
+    },
+    {
+      "id": "incois_argo_10d_VAM",
+      "title": "INCOIS ARGO 10 day data Variational Analysis Methodology",
+      "provider": "INCOIS",
+      "description": "INCOIS ARGO 10 day data Variational Analysis Methodology",
+      "source_type": "erddap_remote",
+      "format": "ISO-19115 metadata",
+      "local_path": null,
+      "metadata_path": "data/incois_argo_10d_VAM_iso19115.xml",
+      "enabled": true,
+      "license": "The data may be used and redistributed for free but is not intended\nfor legal use, since it may contain inaccuracies. Neither the data\nContributor, ERD, NOAA, nor the United States Government, nor any\nof their employees or contractors, makes any warranty, express or\nimplied, including warranties of merchantability and fitness for a\nparticular purpose, or assumes any legal liability for the accuracy,\ncompleteness, or usefulness, of this information.",
+      "services": {
+        "dataset_id": "incois_argo_10d_VAM",
+        "opendap": "https://erddap.incois.gov.in/erddap/griddap/incois_argo_10d_VAM",
+        "erddap_griddap": "https://erddap.incois.gov.in/erddap/griddap/incois_argo_10d_VAM",
+        "wms": "https://erddap.incois.gov.in/erddap/wms/incois_argo_10d_VAM/request?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetCapabilities"
+      },
+      "accessible": true,
+      "remote_only": true,
+      "note": "Registered from ISO 19115 metadata; the gridded NetCDF file is not stored locally and is accessed remotely when the upstream is reachable.",
+      "time_range": {
+        "start": "2004-01-10T00:00:00Z",
+        "end": "2026-07-30T00:00:00Z",
+        "count": 0
+      },
+      "spatial_bounds": {
+        "west": 30.5,
+        "east": 119.5,
+        "south": -29.5,
+        "north": 29.5
+      }
+    },
+    {
+      "id": "incois_argo_10day_McCreary",
+      "title": "INCOIS ARGO 10 Day data Kessler-McCreary Methodology",
+      "provider": "INCOIS",
+      "description": "INCOIS ARGO 10 Day data Kessler-McCreary Methodology",
+      "source_type": "erddap_remote",
+      "format": "ISO-19115 metadata",
+      "local_path": null,
+      "metadata_path": "data/incois_argo_10day_McCreary_iso19115.xml",
+      "enabled": true,
+      "license": "The data may be used and redistributed for free but is not intended\nfor legal use, since it may contain inaccuracies. Neither the data\nContributor, ERD, NOAA, nor the United States Government, nor any\nof their employees or contractors, makes any warranty, express or\nimplied, including warranties of merchantability and fitness for a\nparticular purpose, or assumes any legal liability for the accuracy,\ncompleteness, or usefulness, of this information.",
+      "services": {
+        "dataset_id": "incois_argo_10day_McCreary",
+        "opendap": "https://erddap.incois.gov.in/erddap/griddap/incois_argo_10day_McCreary",
+        "erddap_griddap": "https://erddap.incois.gov.in/erddap/griddap/incois_argo_10day_McCreary",
+        "wms": "https://erddap.incois.gov.in/erddap/wms/incois_argo_10day_McCreary/request?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetCapabilities"
+      },
+      "accessible": true,
+      "remote_only": true,
+      "note": "Registered from ISO 19115 metadata; the gridded NetCDF file is not stored locally and is accessed remotely when the upstream is reachable.",
+      "time_range": {
+        "start": "2001-01-10T00:00:00Z",
+        "end": "2026-07-30T00:00:00Z",
+        "count": 0
+      },
+      "spatial_bounds": {
+        "west": 30.5,
+        "east": 119.5,
+        "south": -29.5,
+        "north": 29.5
+      }
+    },
+    {
+      "id": "incois_argo_mnt_McCreary",
+      "title": "INCOIS ARGO Monthly data Kessler-McCreary Methodology",
+      "provider": "INCOIS",
+      "description": "INCOIS ARGO Monthly data Kessler-McCreary Methodology",
+      "source_type": "erddap_remote",
+      "format": "ISO-19115 metadata",
+      "local_path": null,
+      "metadata_path": "data/incois_argo_mnt_McCreary_iso19115.xml",
+      "enabled": true,
+      "license": "The data may be used and redistributed for free but is not intended\nfor legal use, since it may contain inaccuracies. Neither the data\nContributor, ERD, NOAA, nor the United States Government, nor any\nof their employees or contractors, makes any warranty, express or\nimplied, including warranties of merchantability and fitness for a\nparticular purpose, or assumes any legal liability for the accuracy,\ncompleteness, or usefulness, of this information.",
+      "services": {
+        "dataset_id": "incois_argo_mnt_McCreary",
+        "opendap": "https://erddap.incois.gov.in/erddap/griddap/incois_argo_mnt_McCreary",
+        "erddap_griddap": "https://erddap.incois.gov.in/erddap/griddap/incois_argo_mnt_McCreary",
+        "wms": "https://erddap.incois.gov.in/erddap/wms/incois_argo_mnt_McCreary/request?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetCapabilities"
+      },
+      "accessible": true,
+      "remote_only": true,
+      "note": "Registered from ISO 19115 metadata; the gridded NetCDF file is not stored locally and is accessed remotely when the upstream is reachable.",
+      "time_range": {
+        "start": "2001-01-15T00:00:00Z",
+        "end": "2026-07-15T00:00:00Z",
+        "count": 0
+      },
+      "spatial_bounds": {
+        "west": 30.5,
+        "east": 119.5,
+        "south": -29.5,
+        "north": 29.5
+      }
+    },
+    {
+      "id": "incois_argo_mnt_VAM",
+      "title": "INCOIS ARGO Monthly data Variational Analysis Methodology",
+      "provider": "INCOIS",
+      "description": "INCOIS ARGO Monthly data Variational Analysis Methodology",
+      "source_type": "erddap_remote",
+      "format": "ISO-19115 metadata",
+      "local_path": null,
+      "metadata_path": "data/incois_argo_mnt_VAM_iso19115.xml",
+      "enabled": true,
+      "license": "The data may be used and redistributed for free but is not intended\nfor legal use, since it may contain inaccuracies. Neither the data\nContributor, ERD, NOAA, nor the United States Government, nor any\nof their employees or contractors, makes any warranty, express or\nimplied, including warranties of merchantability and fitness for a\nparticular purpose, or assumes any legal liability for the accuracy,\ncompleteness, or usefulness, of this information.",
+      "services": {
+        "dataset_id": "incois_argo_mnt_VAM",
+        "opendap": "https://erddap.incois.gov.in/erddap/griddap/incois_argo_mnt_VAM",
+        "erddap_griddap": "https://erddap.incois.gov.in/erddap/griddap/incois_argo_mnt_VAM",
+        "wms": "https://erddap.incois.gov.in/erddap/wms/incois_argo_mnt_VAM/request?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetCapabilities"
+      },
+      "accessible": true,
+      "remote_only": true,
+      "note": "Registered from ISO 19115 metadata; the gridded NetCDF file is not stored locally and is accessed remotely when the upstream is reachable.",
+      "time_range": {
+        "start": "2004-01-15T00:00:00Z",
+        "end": "2026-07-15T00:00:00Z",
+        "count": 0
+      },
+      "spatial_bounds": {
+        "west": 30.5,
+        "east": 119.5,
+        "south": -29.5,
+        "north": 29.5
+      }
+    },
+    {
+      "id": "incois_argo_sst_weekly",
+      "title": "INCOIS argo SST data Weekly",
+      "provider": "INCOIS",
+      "description": "INCOIS argo SST data Weekly",
+      "source_type": "erddap_remote",
+      "format": "ISO-19115 metadata",
+      "local_path": null,
+      "metadata_path": "data/incois_argo_sst_weekly_iso19115.xml",
+      "enabled": true,
+      "license": "The data may be used and redistributed for free but is not intended\nfor legal use, since it may contain inaccuracies. Neither the data\nContributor, ERD, NOAA, nor the United States Government, nor any\nof their employees or contractors, makes any warranty, express or\nimplied, including warranties of merchantability and fitness for a\nparticular purpose, or assumes any legal liability for the accuracy,\ncompleteness, or usefulness, of this information.",
+      "services": {
+        "dataset_id": "incois_argo_sst_weekly",
+        "opendap": "https://erddap.incois.gov.in/erddap/griddap/incois_argo_sst_weekly",
+        "erddap_griddap": "https://erddap.incois.gov.in/erddap/griddap/incois_argo_sst_weekly",
+        "wms": "https://erddap.incois.gov.in/erddap/wms/incois_argo_sst_weekly/request?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetCapabilities"
+      },
+      "accessible": true,
+      "remote_only": true,
+      "note": "Registered from ISO 19115 metadata; the gridded NetCDF file is not stored locally and is accessed remotely when the upstream is reachable.",
+      "time_range": {
+        "start": "2009-01-07T00:00:00Z",
+        "end": "2010-12-29T00:00:00Z",
+        "count": 0
+      },
+      "spatial_bounds": {
+        "west": 30.0,
+        "east": 120.0,
+        "south": -30.0,
+        "north": 30.0
+      }
+    },
+    {
+      "id": "local_synthetic_ocean",
+      "title": "Synthetic Ocean",
+      "provider": null,
+      "description": "Local sample NetCDF file (synthetic_ocean.nc).",
+      "source_type": "local",
+      "format": "NetCDF",
+      "local_path": "data/sample_netcdf/synthetic_ocean.nc",
+      "metadata_path": null,
+      "enabled": true,
+      "license": null,
+      "services": null,
+      "accessible": true,
+      "dimensions": {
+        "time": 8,
+        "depth": 5,
+        "latitude": 10,
+        "longitude": 12
+      },
+      "variables": {
+        "canonical_mapping": {
+          "temperature": "temperature",
+          "salinity": "salinity",
+          "u_current": "u",
+          "v_current": "v"
+        },
+        "source_names": [
+          "temperature",
+          "salinity",
+          "u",
+          "v"
+        ]
+      },
+      "coordinate_mapping": {
+        "time": "time",
+        "latitude": "latitude",
+        "longitude": "longitude",
+        "depth": "depth"
+      },
+      "vertical_kind": "depth",
+      "vertical_units": "m",
+      "time_range": {
+        "start": "2024-01-01T00:00:00",
+        "end": "2024-01-08T00:00:00",
+        "count": 8
+      },
+      "depth_range": {
+        "min_meters": 0.0,
+        "max_meters": 100.0,
+        "count": 5,
+        "positive_down": true,
+        "vertical_kind": "depth",
+        "vertical_units": "m"
+      },
+      "spatial_bounds": {
+        "west": 60.0,
+        "east": 71.0,
+        "south": 5.0,
+        "north": 14.0
+      }
+    }
+  ]
+}

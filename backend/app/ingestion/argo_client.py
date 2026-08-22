@@ -27,7 +27,7 @@ from app.models.schemas import (
 from app.services.cache import FileCache
 
 if TYPE_CHECKING:  # pragma: no cover
-    pass
+    from app.ingestion.argo_local import LocalArgoClient
 
 _LOG = logging.getLogger("echoshield.argo")
 
@@ -309,3 +309,30 @@ class ArgoClient:
             )
 
         return {"profiles_available": int(total_cycles), "profiles": profiles}
+
+
+# --- Provider selection ---------------------------------------------------------
+
+RemoteArgoClient = ArgoClient
+"""Alias clarifying that :class:`ArgoClient` is the *remote* (argopy) provider."""
+
+
+def create_argo_client(settings: Settings) -> ArgoClient | LocalArgoClient:
+    """Pick the Argo provider per configuration.
+
+    ``auto`` prefers real local profile files in ``ARGO_CACHE_DIR`` when any
+    exist; otherwise the remote argopy client is used. ``local``/``remote``
+    force one side explicitly.
+    """
+    from app.ingestion.argo_local import LocalArgoClient
+
+    mode = settings.ARGO_PROVIDER
+    if mode == "local":
+        return LocalArgoClient(settings)
+    if mode == "remote":
+        return ArgoClient(settings)
+    cache = settings.argo_cache_dir
+    has_local_files = cache.is_dir() and any(cache.glob("*.nc"))
+    if has_local_files:
+        return LocalArgoClient(settings)
+    return ArgoClient(settings)

@@ -69,6 +69,9 @@ class Settings(BaseSettings):
     # --- Argo ingestion ----------------------------------------------------
     ARGO_SOURCE: Literal["erddap", "gdac"] = "erddap"
     ARGO_DATASET: str = "phy"
+    # Provider selection: "auto" prefers real local files in ARGO_CACHE_DIR
+    # when present, otherwise the remote argopy client is used.
+    ARGO_PROVIDER: Literal["auto", "local", "remote"] = "auto"
 
     # --- Glider ingestion (future providers) --------------------------------
     GLIDER_DATA_URL: str | None = None

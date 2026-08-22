@@ -15,7 +15,7 @@ from app.api.routes import argo, glider, health, model_data
 from app.api.routes.argo import UpstreamUnavailable as ArgoUpstreamUnavailable
 from app.core.config import Settings, get_settings
 from app.core.logging import add_request_logging_middleware, configure_logging
-from app.ingestion.argo_client import ArgoClient, ArgoClientError
+from app.ingestion.argo_client import ArgoClientError, create_argo_client
 from app.ingestion.thredds_client import ThreddsClient, ThreddsClientError
 from app.services.dataset_registry import DatasetRegistry
 from app.services.glider import GliderService
@@ -39,7 +39,7 @@ async def _lifespan_for(app: FastAPI, settings: Settings) -> AsyncIterator[None]
     app.state.settings = settings
     app.state.registry = registry
     app.state.model_service = ModelDataService(registry, settings)
-    app.state.argo_client = ArgoClient(settings)
+    app.state.argo_client = create_argo_client(settings)
     app.state.glider_service = GliderService(settings)
     app.state.registry.refresh_in_background()
     try:

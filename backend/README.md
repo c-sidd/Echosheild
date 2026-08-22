@@ -59,11 +59,11 @@ Frontend integration contract: [`docs/api-contract.md`](../docs/api-contract.md)
 | `GET /model/{id}/metadata` | Dimensions, variables, coordinates, time/depth ranges |
 | `GET /model/{id}/variables` | Variable discovery |
 | `GET /model/{id}/times` | Time axis (ISO-8601) |
-| `GET /model/{id}/depths` | Depth levels in meters |
+| `GET /model/{id}/depths` | Vertical levels in native units (`metadata.vertical_kind`: depth meters / pressure dbar) |
 | `GET /model/{id}/slice?variable&time_index&depth&west&east&south&north` | 2-D grid slice (auto-downsampled to `MAX_GRID_POINTS`, NaN → null) |
 | `GET /model/{id}/profile?variable&latitude&longitude&time_index` | Vertical profile at nearest grid point |
 | `GET /model/{id}/point?variables=a,b&latitude&longitude&time_index&depth` | Nearest-grid point sample |
-| `GET /model/{id}/currents?time_index&depth&bbox…` | (u, v) vector field + max speed |
+| `GET /model/{id}/currents?time_index&depth&bbox…` | (u, v) vector field + max speed; `{"available": false, "reason": …}` when absent |
 | `GET /model/{id}/services` | OPeNDAP / WMS / WCS / ERDDAP URLs for direct frontend use |
 | `GET /argo/floats?lon_min&lon_max&lat_min&lat_max` | Argo float search (Indian Ocean default) |
 | `GET /argo/{wmo}` · `GET /argo/{wmo}/profile?cycle=n` | Float detail / single profile |
@@ -82,14 +82,51 @@ The versioned prefix is configurable via `API_V1_PREFIX`; with the default
 API requests reference **registered dataset IDs only** — there is no arbitrary
 file or URL access. Sources discovered at startup:
 
-1. Local NetCDF under `NETCDF_DATA_ROOT` (IDs prefixed `local_`)
+1. Local NetCDF under `NETCDF_DATA_ROOT`, `ARGO_CACHE_DIR` and
+   `GLIDER_CACHE_DIR` (IDs prefixed `local_`; cache-dir collisions get
+   deterministic `local_<dirname>_<stem>` IDs)
 2. ISO 19115 metadata records (`*iso19115*.xml`) under `DATA_ROOT`
    — the included INCOIS ERDDAP records register real products such as
-   `incois_argo_sst_weekly` with griddap/OPeNDAP + WMS endpoints
+   `incois_argo_sst_weekly` with griddap/OPeNDAP + WMS endpoints, and
+   provider/license provenance
 3. Optional THREDDS catalog entries when `THREDDS_CATALOG_URL` is set
+
+Corrupt/unreadable files are isolated: discovery logs a warning per bad file
+and continues; one broken `.nc` never removes the healthy registry.
 
 Remote datasets open lazily via xarray (`engine=pydap`) — no bulk downloads.
 Paths are validated against path traversal; service URLs must be http(s).
+
+## Canonical variable mapping (`app/ingestion/variable_mapping.py`)
+
+All data responses expose a **canonical variable layer** so the frontend can
+render any source schema without per-dataset special cases:
+
+* Coordinates resolved by CF precedence — `standard_name` → `axis` attribute →
+  units → known names. INCOIS conventions (`TAXIS/XAXIS/YAXIS/ZAX`,
+  `TEMP/SAL`) resolve out of the box; result is reported in
+  `metadata.coordinate_mapping`.
+* Variables classified to canonical categories (`temperature`, `salinity`,
+  `u_current`, `v_current`, `chlorophyll`, …) exposed as
+  `canonical_name` on variables/slices/profiles/points.
+* Vertical honesty: axis kind is `depth` (meters), `pressure` (native dbar)
+  or `other`. Pressure values are **never silently converted** to meters;
+  responses carry `vertical_kind` + `vertical_units`.
+
+Regenerate the dataset manifest (what is registered, from which files) with:
+
+```bash
+uv run --project backend python scripts/generate_dataset_manifest.py
+# -> data/datasets/datasets.json
+```
+
+## Argo provider selection
+
+`ARGO_PROVIDER=auto|local|remote` (default `auto`). With NetCDF profile files
+present in `data/argo_cache/`, `/argo/*` endpoints are served entirely
+locally (no network); otherwise they fall through to argopy remote access.
+Local files keep pressure as pressure — `depth_meters` is only populated
+when the file itself provides depth.
 
 ## Configuration
 
@@ -113,7 +150,7 @@ response-size limits (`MAX_DATA_POINTS`, `MAX_PROFILE_POINTS`,
 
 ```bash
 cd backend
-uv run pytest            # 69 tests (external services mocked)
+uv run pytest            # 95 tests (external services mocked)
 uv run ruff check .
 uv run ruff format --check .
 uv run mypy app          # strict mode

@@ -16,6 +16,12 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 
+from app.ingestion.variable_mapping import (
+    ResolvedCoordinates,
+    VerticalKind,
+    classify_variable,
+    resolve_coordinates,
+)
 from app.models.schemas import (
     CoordinateMetadata,
     DatasetMetadata,
@@ -31,10 +37,6 @@ from app.models.schemas import (
 _LOG = logging.getLogger("echoshield.netcdf")
 
 ALLOWED_SUFFIXES = {".nc", ".nc4", ".cdf"}
-LAT_CANDIDATES = ("lat", "latitude", "y")
-LON_CANDIDATES = ("lon", "longitude", "x")
-TIME_CANDIDATES = ("time", "t")
-DEPTH_CANDIDATES = ("depth", "deptht", "lev", "level", "pres", "pressure", "z")
 
 
 class NetCDFParseError(ValueError):
@@ -92,13 +94,24 @@ def find_coordinate(ds: xr.Dataset, candidates: Iterable[str]) -> str | None:
 
 
 class CoordinateMap:
-    """Detected coordinate variables for a dataset."""
+    """Detected coordinate variables for a dataset (metadata-driven)."""
 
     def __init__(self, ds: xr.Dataset) -> None:
-        self.time = find_coordinate(ds, TIME_CANDIDATES)
-        self.depth = find_coordinate(ds, DEPTH_CANDIDATES)
-        self.lat = find_coordinate(ds, LAT_CANDIDATES)
-        self.lon = find_coordinate(ds, LON_CANDIDATES)
+        self.resolved: ResolvedCoordinates = resolve_coordinates(ds)
+        self.time = self.resolved.time
+        self.lat = self.resolved.latitude
+        self.lon = self.resolved.longitude
+        self.vertical = self.resolved.vertical
+        # Backwards-compatible alias; ``vertical_kind`` is authoritative.
+        self.depth = self.vertical
+
+    @property
+    def vertical_kind(self) -> VerticalKind:
+        return self.resolved.vertical_kind
+
+    @property
+    def vertical_units(self) -> str | None:
+        return self.resolved.vertical_units
 
 
 def get_dimensions(ds: xr.Dataset) -> dict[str, int]:
@@ -114,9 +127,14 @@ def list_variables(ds: xr.Dataset) -> list[VariableMetadata]:
         if name_str in coords or name_str.startswith(excluded_prefixes):
             continue
         attrs = da.attrs
+        canonical = classify_variable(
+            name_str,
+            {str(k).lower(): str(v) for k, v in attrs.items() if isinstance(v, (str, int, float))},
+        )
         out.append(
             VariableMetadata(
                 name=name_str,
+                canonical_name=canonical,
                 long_name=_safe_str(attrs.get("long_name")),
                 standard_name=_safe_str(attrs.get("standard_name")),
                 units=_safe_str(attrs.get("units")),
@@ -192,32 +210,54 @@ def get_time_range(ds: xr.Dataset) -> TimeRange | None:
     return TimeRange(start=values[0], end=values[-1], count=len(values))
 
 
-def get_depth_values_meters(ds: xr.Dataset) -> list[float]:
+def get_vertical_values(ds: xr.Dataset) -> list[float]:
+    """Vertical coordinate values in their NATIVE units (no conversion).
+
+    For pressure coordinates the values are pressure (e.g. dbar); callers
+    must label them using :func:`get_vertical_kind` / ``vertical_units``.
+    Only sign normalisation is applied: height-above-surface storage
+    (negative-up depth) is flipped to positive-down.
+    """
     cmap = CoordinateMap(ds)
-    if cmap.depth is None:
+    if cmap.vertical is None:
         return []
-    raw = np.asarray(ds[cmap.depth].values).ravel().astype(float)
-    units = _safe_str(ds[cmap.depth].attrs.get("units")) or ""
-    if "dbar" in units.lower():
-        raw = raw * 1.019716  # approximate dbar -> m conversion for display
-    elif raw.size and float(raw.min()) < 0 and abs(float(raw.min())) > 0:
-        # Some products store height above surface (negative down).
+    raw = np.asarray(ds[cmap.vertical].values).ravel().astype(float)
+    if cmap.resolved.vertical_kind == "depth" and raw.size and float(raw.min()) < 0:
+        # Height above surface (negative-down values): flip to positive-down.
         raw = -raw
-    ordered = sorted(float(v) for v in raw if math.isfinite(v))
-    return ordered
+    return sorted(float(v) for v in raw if math.isfinite(v))
+
+
+def get_vertical_kind(ds: xr.Dataset) -> VerticalKind:
+    cmap = CoordinateMap(ds)
+    return cmap.vertical_kind
+
+
+def get_depth_values_meters(ds: xr.Dataset) -> list[float]:
+    """Backwards-compatible alias of :func:`get_vertical_values`.
+
+    Historical name retained; values are native-unit vertical coordinates
+    (see ``vertical_kind`` on responses — pressure is *not* converted).
+    """
+    return get_vertical_values(ds)
 
 
 def get_depth_range(ds: xr.Dataset) -> DepthRange | None:
-    values = get_depth_values_meters(ds)
+    values = get_vertical_values(ds)
     if not values:
         return None
     cmap = CoordinateMap(ds)
     positive_down = True
-    if cmap.depth is not None:
-        raw_min = float(np.nanmin(np.asarray(ds[cmap.depth].values).ravel().astype(float)))
+    if cmap.vertical is not None:
+        raw_min = float(np.nanmin(np.asarray(ds[cmap.vertical].values).ravel().astype(float)))
         positive_down = raw_min >= 0
     return DepthRange(
-        min_meters=values[0], max_meters=values[-1], count=len(values), positive_down=positive_down
+        min_meters=values[0],
+        max_meters=values[-1],
+        count=len(values),
+        positive_down=positive_down,
+        vertical_kind=cmap.vertical_kind,
+        vertical_units=cmap.vertical_units,
     )
 
 
@@ -249,6 +289,7 @@ def build_metadata(
 ) -> DatasetMetadata:
     attrs = {str(k): _attr_to_json(v) for k, v in list(ds.attrs.items())[:40] if isinstance(k, str)}
     resolved_title = title or _safe_str(ds.attrs.get("title")) or dataset_id
+    cmap = CoordinateMap(ds)
     return DatasetMetadata(
         id=dataset_id,
         title=resolved_title,
@@ -257,6 +298,7 @@ def build_metadata(
         dimensions=get_dimensions(ds),
         variables=list_variables(ds),
         coordinates=get_coordinates(ds),
+        coordinate_mapping=cmap.resolved.mapping,
         global_attributes=attrs,
         time_range=get_time_range(ds),
         depth_range=get_depth_range(ds),
@@ -294,17 +336,19 @@ def read_slice(
         time_iso = _to_iso(np.asarray(ds[cmap.time].values).ravel()[idx])
 
     depth_used: float | None = None
-    if cmap.depth is not None and cmap.depth in da.dims:
-        depths = get_depth_values_meters(ds)
+    if cmap.vertical is not None and cmap.vertical in da.dims:
+        verticals = get_vertical_values(ds)
         if depth_meters is None:
-            depth_idx = 0
+            vertical_idx = 0
         else:
-            if not depths:
-                raise NetCDFParseError("dataset has a depth coordinate but no readable values")
-            depth_idx = int(min(range(len(depths)), key=lambda i: abs(depths[i] - depth_meters)))
-        actual = np.asarray(ds[cmap.depth].values).ravel()[depth_idx]
+            if not verticals:
+                raise NetCDFParseError("dataset has a vertical coordinate but no readable values")
+            vertical_idx = int(
+                min(range(len(verticals)), key=lambda i: abs(verticals[i] - depth_meters))
+            )
+        actual = np.asarray(ds[cmap.vertical].values).ravel()[vertical_idx]
         depth_used = float(actual)
-        da = da.isel({cmap.depth: depth_idx})
+        da = da.isel({cmap.vertical: vertical_idx})
 
     lon_name, lat_name = cmap.lon, cmap.lat
     if (
@@ -352,10 +396,13 @@ def read_slice(
     return ModelSlice(
         dataset_id="",
         variable=variable,
+        canonical_name=_canonical_of(ds, variable),
         units=units,
         time_index=time_index,
         time=time_iso,
         depth_meters=depth_used,
+        vertical_kind=cmap.vertical_kind if cmap.vertical is not None else None,
+        vertical_units=cmap.vertical_units,
         latitude=lats,
         longitude=lons,
         values=values,
@@ -390,32 +437,27 @@ def read_profile(
         time_iso = _to_iso(np.asarray(ds[cmap.time].values).ravel()[idx])
 
     da = da.sel({cmap.lat: latitude, cmap.lon: longitude}, method="nearest")
-    if cmap.depth is not None and cmap.depth in da.dims:
-        depths_all = np.asarray(ds[cmap.depth].values).ravel()
-        step = max(1, int(da.sizes[cmap.depth]) // max_points)
-        da = da.isel({cmap.depth: slice(None, None, step)})
-        depths_raw = np.asarray(depths_all)[::step]
-        depths_m = get_depth_values_meters(ds)
-        # Map selected indices onto converted meter values.
-        ratio = len(depths_m) / max(len(depths_all), 1)
-        depths_out = (
-            [depths_m[min(int(i * ratio), len(depths_m) - 1)] for i in range(len(depths_raw))]
-            if depths_m
-            else [float(v) for v in depths_raw]
-        )
+    if cmap.vertical is not None and cmap.vertical in da.dims:
+        verticals_all = np.asarray(ds[cmap.vertical].values).ravel()
+        step = max(1, int(da.sizes[cmap.vertical]) // max_points)
+        da = da.isel({cmap.vertical: slice(None, None, step)})
+        verticals_raw = np.asarray(verticals_all)[::step]
         vals = [_finite_or_none(float(v)) for v in np.asarray(da.values, dtype=float).ravel()]
     else:
-        depths_out = [0.0]
+        verticals_raw = np.asarray([0.0])
         vals = [_finite_or_none(float(np.asarray(da.values, dtype=float).ravel()[0]))]
 
     return OceanProfile(
         dataset_id="",
         variable=variable,
+        canonical_name=_canonical_of(ds, variable),
         units=_safe_str(ds[variable].attrs.get("units")),
         latitude=float(da[cmap.lat].values) if cmap.lat in da.coords else latitude,
         longitude=float(da[cmap.lon].values) if cmap.lon in da.coords else longitude,
         time=time_iso,
-        depths_meters=[float(d) for d in depths_out],
+        depths_meters=[float(v) for v in verticals_raw],
+        vertical_kind=cmap.vertical_kind,
+        vertical_units=cmap.vertical_units,
         values=vals,
     )
 
@@ -460,13 +502,13 @@ def read_point(
             if first_da is None:
                 nearest["latitude"] = float(da[cmap.lat].values)
                 nearest["longitude"] = float(da[cmap.lon].values)
-        if cmap.depth is not None and cmap.depth in da.dims:
-            depths = np.asarray(ds[cmap.depth].values).ravel().astype(float)
-            target = depth_meters if depth_meters is not None else float(depths[0])
-            depth_idx = int(min(range(len(depths)), key=lambda i: abs(depths[i] - target)))
-            da = da.isel({cmap.depth: depth_idx})
+        if cmap.vertical is not None and cmap.vertical in da.dims:
+            verticals = np.asarray(ds[cmap.vertical].values).ravel().astype(float)
+            target = depth_meters if depth_meters is not None else float(verticals[0])
+            vertical_idx = int(min(range(len(verticals)), key=lambda i: abs(verticals[i] - target)))
+            da = da.isel({cmap.vertical: vertical_idx})
             if first_da is None:
-                depth_used = float(depths[depth_idx])
+                depth_used = float(verticals[vertical_idx])
         raw = float(np.asarray(da.values).ravel()[0])
         values[variable] = _finite_or_none(raw)
         units[variable] = _safe_str(ds[variable].attrs.get("units"))
@@ -479,6 +521,8 @@ def read_point(
         longitude=longitude,
         time=time_iso,
         depth_meters=depth_used,
+        vertical_kind=cmap.vertical_kind,
+        vertical_units=cmap.vertical_units,
         nearest_grid=nearest,
         values=values,
         units=units,
@@ -486,6 +530,17 @@ def read_point(
 
 
 # --- helpers ----------------------------------------------------------------
+
+
+def _canonical_of(ds: xr.Dataset, variable: str) -> str | None:
+    da = ds.get(variable)
+    if da is None:
+        return None
+    attrs = {
+        str(k).lower(): str(v) for k, v in da.attrs.items() if isinstance(v, (str, int, float))
+    }
+    canonical = classify_variable(variable, attrs)
+    return str(canonical) if canonical else None
 
 
 def _finite_or_none(value: float) -> float | None:
