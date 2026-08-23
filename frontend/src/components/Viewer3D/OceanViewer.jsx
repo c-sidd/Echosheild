@@ -8,6 +8,16 @@ import CurrentArrows from '@/components/Viewer3D/CurrentArrows'
 import InstrumentMarkers from '@/components/Viewer3D/InstrumentMarkers'
 import CanvasProbe from '@/components/Viewer3D/CanvasProbe'
 
+function getRenderDpr() {
+  if (typeof window === 'undefined') return 1
+  const memory = Number(navigator.deviceMemory || 4)
+  const cores = Number(navigator.hardwareConcurrency || 4)
+  const mobile = /Android|iPhone|iPad|Mobile/i.test(navigator.userAgent)
+  if (mobile || memory <= 4 || cores <= 4) return 1
+  if (memory <= 8 || cores <= 8) return 1.25
+  return 1.5
+}
+
 export default function OceanViewer() {
   return (
     <div className="absolute inset-0">
@@ -22,7 +32,8 @@ export default function OceanViewer() {
           gl.toneMapping = THREE.ACESFilmicToneMapping
           gl.setClearColor('#020b18')
         }}
-        dpr={[1, 2]}
+        dpr={getRenderDpr()}
+        performance={{ min: 0.5, max: 1, debounce: 250 }}
       >
         <SceneManager />
         <OceanFloor />
