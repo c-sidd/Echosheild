@@ -19,9 +19,12 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 BACKEND_DIR = PROJECT_ROOT / "backend"
 sys.path.insert(0, str(BACKEND_DIR))
 
-from app.core.config import Settings  # noqa: E402
-from app.ingestion import netcdf_parser as ncp  # noqa: E402
-from app.services.dataset_registry import DatasetRegistry, RegisteredDataset  # noqa: E402
+from app.core.config import Settings
+from app.ingestion import netcdf_parser as ncp
+from app.services.dataset_registry import (
+    DatasetRegistry,
+    RegisteredDataset,
+)
 
 MANIFEST_PATH = PROJECT_ROOT / "data" / "datasets" / "datasets.json"
 

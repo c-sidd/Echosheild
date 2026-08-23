@@ -93,3 +93,14 @@ ignore_missing_imports = true
 exclude = [
     "^tests/"
 ]
+
+[[tool.mypy.overrides]]
+module = [
+    "pandas",
+    "pandas.*",
+    "argopy",
+    "argopy.*",
+    "pydap",
+    "pydap.*",
+]
+ignore_missing_imports = true

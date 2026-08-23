@@ -316,23 +316,53 @@ class ArgoClient:
 RemoteArgoClient = ArgoClient
 """Alias clarifying that :class:`ArgoClient` is the *remote* (argopy) provider."""
 
+_ARGO_NOT_INITIALIZED = (
+    "Argo client not initialized — check ARGO_PROVIDER/ARGO_SOURCE configuration"
+    " and network connectivity"
+)
 
-def create_argo_client(settings: Settings) -> ArgoClient | LocalArgoClient:
+
+class NullArgoClient:
+    """Inert stand-in used when Argo ingestion cannot be initialised.
+
+    Startup must never fail because of an optional observation source: every
+    method raises :class:`ArgoClientError`, which the API translates into a
+    clean HTTP 503 instead of an AttributeError.
+    """
+
+    source = "null"
+
+    def search_floats(self, **kwargs: Any) -> list[ArgoFloatSummary]:
+        raise ArgoClientError(_ARGO_NOT_INITIALIZED)
+
+    def float_detail(self, wmo: int, *, max_profiles: int = 5) -> ArgoFloatDetail:
+        raise ArgoClientError(_ARGO_NOT_INITIALIZED)
+
+    def float_profile(self, wmo: int, cycle: int | None = None) -> ArgoProfile:
+        raise ArgoClientError(_ARGO_NOT_INITIALIZED)
+
+
+def create_argo_client(settings: Settings) -> ArgoClient | LocalArgoClient | NullArgoClient:
     """Pick the Argo provider per configuration.
 
     ``auto`` prefers real local profile files in ``ARGO_CACHE_DIR`` when any
     exist; otherwise the remote argopy client is used. ``local``/``remote``
-    force one side explicitly.
+    force one side explicitly. Construction failures degrade to
+    :class:`NullArgoClient` so the application still boots.
     """
     from app.ingestion.argo_local import LocalArgoClient
 
     mode = settings.ARGO_PROVIDER
-    if mode == "local":
-        return LocalArgoClient(settings)
-    if mode == "remote":
+    try:
+        if mode == "local":
+            return LocalArgoClient(settings)
+        if mode == "remote":
+            return ArgoClient(settings)
+        cache = settings.argo_cache_dir
+        has_local_files = cache.is_dir() and any(cache.glob("*.nc"))
+        if has_local_files:
+            return LocalArgoClient(settings)
         return ArgoClient(settings)
-    cache = settings.argo_cache_dir
-    has_local_files = cache.is_dir() and any(cache.glob("*.nc"))
-    if has_local_files:
-        return LocalArgoClient(settings)
-    return ArgoClient(settings)
+    except Exception as exc:  # noqa: BLE001 - optional provider, never fatal
+        _LOG.warning("argo_provider_init_failed mode=%s error=%r", mode, exc)
+        return NullArgoClient()

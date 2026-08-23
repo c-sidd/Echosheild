@@ -15,7 +15,11 @@ from app.api.routes import argo, glider, health, model_data
 from app.api.routes.argo import UpstreamUnavailable as ArgoUpstreamUnavailable
 from app.core.config import Settings, get_settings
 from app.core.logging import add_request_logging_middleware, configure_logging
-from app.ingestion.argo_client import ArgoClientError, create_argo_client
+from app.ingestion.argo_client import (
+    ArgoClientError,
+    NullArgoClient,
+    create_argo_client,
+)
 from app.ingestion.thredds_client import ThreddsClient, ThreddsClientError
 from app.services.dataset_registry import DatasetRegistry
 from app.services.glider import GliderService
@@ -39,7 +43,13 @@ async def _lifespan_for(app: FastAPI, settings: Settings) -> AsyncIterator[None]
     app.state.settings = settings
     app.state.registry = registry
     app.state.model_service = ModelDataService(registry, settings)
-    app.state.argo_client = create_argo_client(settings)
+    try:
+        app.state.argo_client = create_argo_client(settings)
+    except Exception as exc:  # noqa: BLE001 - Argo is optional; never block startup
+        _LOG.warning(
+            "argo_client_init_failed error=%r — /argo endpoints will answer 503", exc
+        )
+        app.state.argo_client = NullArgoClient()
     app.state.glider_service = GliderService(settings)
     app.state.registry.refresh_in_background()
     try:
@@ -75,7 +85,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         CORSMiddleware,
         allow_origins=resolved_settings.CORS_ORIGINS,
         allow_credentials=False,
-        allow_methods=["GET"],
+        allow_methods=["GET", "POST"],
         allow_headers=["*"],
     )
     add_request_logging_middleware(app)

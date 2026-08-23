@@ -140,6 +140,64 @@ class ModelSlice(BaseModel):
     downsampling: dict[str, int] = Field(default_factory=dict)
 
 
+class TimestampEntry(BaseModel):
+    """One entry of a dataset's decoded time axis (index ↔ ISO-8601)."""
+
+    index: int
+    iso: str
+
+
+class SliceRequest(BaseModel):
+    """One slice specification inside a batch request."""
+
+    variable: str
+    time_index: int | None = Field(default=None, ge=0)
+    depth_meters: float | None = None
+    west: float | None = Field(default=None, ge=-180, le=360)
+    east: float | None = Field(default=None, ge=-180, le=360)
+    south: float | None = Field(default=None, ge=-90, le=90)
+    north: float | None = Field(default=None, ge=-90, le=90)
+
+    def bbox(self) -> tuple[float, float, float, float] | None:
+        """Validated ``(west, east, south, north)``, or ``None`` when unset."""
+        values = [self.west, self.east, self.south, self.north]
+        if all(v is None for v in values):
+            return None
+        if any(v is None for v in values):
+            raise ValueError("bbox requires all of west, east, south and north")
+        assert self.west is not None and self.east is not None  # narrowed above
+        assert self.south is not None and self.north is not None
+        if not (-180 <= self.west < self.east <= 360):
+            raise ValueError(f"invalid longitude bounds: west={self.west}, east={self.east}")
+        if not (-90 <= self.south < self.north <= 90):
+            raise ValueError(f"invalid latitude bounds: south={self.south}, north={self.north}")
+        return (self.west, self.east, self.south, self.north)
+
+
+class SliceBatchRequest(BaseModel):
+    """Batch of horizontal slices fetched in one round-trip."""
+
+    slices: list[SliceRequest] = Field(..., min_length=1, max_length=10)
+
+
+class DatasetExtent(BaseModel):
+    """Single-call startup payload describing everything renderable.
+
+    Combines the time axis, vertical levels and spatial footprint so the
+    frontend can initialise sliders/viewports without opening the dataset.
+    """
+
+    dataset_id: str
+    title: str | None = None
+    source_type: DatasetSourceType = "local"
+    time_range: TimeRange
+    depth_levels: list[float]
+    vertical_kind: VerticalKind = "depth"
+    vertical_units: str | None = None
+    spatial_bounds: SpatialBounds | None = None
+    variables: list[str]
+
+
 class OceanProfile(BaseModel):
     dataset_id: str
     variable: str

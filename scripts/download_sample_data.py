@@ -15,7 +15,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "backend"))
 
-from app.testing_utils import SYNTHETIC_NOTE, write_synthetic_netcdf  # noqa: E402
+from app.testing_utils import SYNTHETIC_NOTE, write_synthetic_netcdf
 
 
 def main() -> None:

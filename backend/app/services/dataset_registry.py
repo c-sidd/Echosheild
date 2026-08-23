@@ -26,7 +26,7 @@ from app.ingestion.thredds_client import (
     build_erddap_griddap_urls,
     build_thredds_service_urls,
 )
-from app.models.schemas import DatasetInfo, ServiceEndpoints, TimeRange
+from app.models.schemas import DatasetInfo, ServiceEndpoints, SpatialBounds, TimeRange
 
 _LOG = logging.getLogger("echoshield.registry")
 
@@ -43,6 +43,15 @@ class RegisteredDataset:
     @property
     def accessible(self) -> bool:
         return self.local_path is not None or self.remote_url is not None
+
+
+@dataclass(frozen=True)
+class AxisProbe:
+    """Cheap coordinate-axis facts read from a local NetCDF header."""
+
+    readable: bool
+    time_range: TimeRange | None = None
+    spatial_bounds: SpatialBounds | None = None
 
 
 class DatasetRegistry:
@@ -168,24 +177,38 @@ class DatasetRegistry:
             http_download=thredds_urls.http_download,
         )
 
-    def _probe_readable(self, nc_file: Path) -> bool:
-        """Cheap header check so corrupt files never break discovery."""
+    def _probe_axes(self, nc_file: Path) -> AxisProbe:
+        """Cheap header + coordinate probe so corrupt files never break discovery.
+
+        Reads only the coordinate axes (time, lat, lon) — data variables stay
+        lazy. The result feeds ``time_range.count`` and ``spatial_bounds`` so
+        dataset listings carry real extents instead of placeholders.
+        """
         try:
             import xarray as xr
 
-            ds = xr.open_dataset(nc_file, decode_times=False)
-            ds.close()
-            return True
+            from app.ingestion import netcdf_parser as ncp
+
+            ds = xr.open_dataset(nc_file, decode_times=True)
+            try:
+                return AxisProbe(
+                    readable=True,
+                    time_range=ncp.get_time_range(ds),
+                    spatial_bounds=ncp.get_spatial_bounds(ds),
+                )
+            finally:
+                ds.close()
         except Exception as exc:  # noqa: BLE001 - corrupt/unreadable files are isolated
             _LOG.warning("dataset_skipped_unreadable file=%s error=%s", nc_file.name, exc)
-            return False
+            return AxisProbe(readable=False)
 
     def _discover_local_netcdf(self) -> int:
         count = 0
         seen_ids: set[str] = set()
         for root in self._local_roots():
             for nc_file in sorted(root.glob("*.nc")):
-                if not self._probe_readable(nc_file):
+                probe = self._probe_axes(nc_file)
+                if not probe.readable:
                     continue
                 sidecar = self._sidecar_record(nc_file)
                 # Deterministic ID: the ISO 19115 product identifier when a
@@ -202,11 +225,21 @@ class DatasetRegistry:
                     continue
                 seen_ids.add(dataset_id)
 
-                time_range = (
-                    TimeRange(start=sidecar.time_start, end=sidecar.time_end, count=0)
-                    if sidecar and sidecar.time_start and sidecar.time_end
-                    else None
-                )
+                # Real extents from the file win over metadata placeholders;
+                # the sidecar keeps narrative start/end when the file itself
+                # carries no readable time axis.
+                time_range: TimeRange | None = None
+                if sidecar and sidecar.time_start and sidecar.time_end:
+                    time_range = TimeRange(
+                        start=sidecar.time_start,
+                        end=sidecar.time_end,
+                        count=probe.time_range.count if probe.time_range else 0,
+                    )
+                elif probe.time_range is not None:
+                    time_range = probe.time_range
+                spatial_bounds = (
+                    sidecar.spatial_bounds if sidecar and sidecar.spatial_bounds else None
+                ) or probe.spatial_bounds
                 info = DatasetInfo(
                     id=dataset_id,
                     title=(sidecar.title if sidecar else nc_file.stem.replace("_", " ").title()),
@@ -220,7 +253,7 @@ class DatasetRegistry:
                     license=sidecar.use_limitation if sidecar else None,
                     metadata_path=sidecar.source_file if sidecar else None,
                     time_range=time_range,
-                    spatial_bounds=sidecar.spatial_bounds if sidecar else None,
+                    spatial_bounds=spatial_bounds,
                     services=self._services_for(sidecar, nc_file, dataset_id),
                 )
                 self._register(RegisteredDataset(info=info, local_path=nc_file))

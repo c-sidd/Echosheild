@@ -7,13 +7,16 @@ from fastapi import APIRouter, Query, Request
 from app.models.schemas import (
     CurrentsUnavailable,
     CurrentVectorField,
+    DatasetExtent,
     DatasetInfo,
     DatasetMetadata,
     ModelSlice,
     OceanProfile,
     PointSample,
     ServiceEndpoints,
+    SliceBatchRequest,
     TimeRange,
+    TimestampEntry,
     VariableMetadata,
 )
 from app.services.dataset_registry import RegisteredDataset
@@ -100,6 +103,65 @@ def get_times(dataset_id: str, request: Request) -> TimeRange:
     if not times:
         raise ValueError(f"dataset {dataset_id!r} has no time coordinate")
     return TimeRange(start=times[0], end=times[-1], count=len(times))
+
+
+_MAX_TIMES_LIST = 2000
+
+
+@router.get(
+    "/{dataset_id}/times/list",
+    response_model=list[str],
+    summary="Full ISO-8601 time axis as a flat array",
+    description=(
+        "Every decoded timestep in order (index i ↔ response[i])."
+        f" Capped at {_MAX_TIMES_LIST} entries; use ``/timestamps`` for the"
+        " index-paired form."
+    ),
+    responses={404: {"description": "Unknown dataset"}},
+)
+def list_times(dataset_id: str, request: Request) -> list[str]:
+    times = _service(request).get_times(dataset_id)
+    if not times:
+        raise ValueError(f"dataset {dataset_id!r} has no time coordinate")
+    return times[:_MAX_TIMES_LIST]
+
+
+@router.get(
+    "/{dataset_id}/timestamps",
+    response_model=list[TimestampEntry],
+    summary="Time axis as explicit (index, ISO-8601) pairs",
+    description=(
+        "Explicit index↔timestamp mapping for scrubbers and deep-links;"
+        f" capped at {_MAX_TIMES_LIST} entries."
+    ),
+    responses={404: {"description": "Unknown dataset"}},
+)
+def list_timestamps(dataset_id: str, request: Request) -> list[TimestampEntry]:
+    times = _service(request).get_times(dataset_id)
+    if not times:
+        raise ValueError(f"dataset {dataset_id!r} has no time coordinate")
+    return [
+        TimestampEntry(index=index, iso=value)
+        for index, value in enumerate(times[:_MAX_TIMES_LIST])
+    ]
+
+
+@router.get(
+    "/{dataset_id}/extent",
+    response_model=DatasetExtent,
+    summary="Single-call startup extent",
+    description=(
+        "Complete renderable envelope — full time range, every vertical"
+        " level, the lat/lon footprint and available variables — so the UI"
+        " initialises without opening the dataset."
+    ),
+    responses={
+        404: {"description": "Unknown dataset"},
+        503: {"description": "Remote dataset unavailable"},
+    },
+)
+def get_extent(dataset_id: str, request: Request) -> DatasetExtent:
+    return _service(request).get_extent(dataset_id)
 
 
 @router.get(
@@ -208,6 +270,31 @@ def read_point(
         time_index=time_index,
         depth_meters=depth,
     )
+
+
+@router.post(
+    "/{dataset_id}/slice/batch",
+    response_model=list[ModelSlice],
+    summary="Fetch several horizontal slices in one round-trip",
+    description=(
+        "Body: {\"slices\": [{variable, time_index?, depth_meters?,"
+        " west/east/south/north?}, ...]} — at most 10 per batch. Slices are"
+        " read concurrently off the event loop and returned in request order."
+    ),
+    responses={
+        404: {"description": "Unknown dataset or variable"},
+        422: {"description": "Invalid parameters"},
+    },
+)
+async def read_slice_batch(
+    dataset_id: str,
+    request: Request,
+    body: SliceBatchRequest,
+) -> list[ModelSlice]:
+    # Validate every bbox up-front so malformed requests fail before any I/O.
+    for item in body.slices:
+        item.bbox()
+    return await _service(request).read_slice_batch(dataset_id, list(body.slices))
 
 
 @router.get(

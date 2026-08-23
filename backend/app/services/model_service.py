@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import threading
 from collections import OrderedDict
+from functools import partial
 from typing import Any, cast
 
 import xarray as xr
@@ -15,12 +17,15 @@ from app.ingestion.variable_mapping import CanonicalVariable, classify_dataset_v
 from app.models.schemas import (
     CurrentsUnavailable,
     CurrentVectorField,
+    DatasetExtent,
     DatasetInfo,
     DatasetMetadata,
     ModelSlice,
     OceanProfile,
     PointSample,
     ServiceEndpoints,
+    SliceRequest,
+    TimeRange,
     VariableMetadata,
 )
 from app.services.dataset_registry import DatasetRegistry, RegisteredDataset
@@ -127,6 +132,26 @@ class ModelDataService:
     def get_time_range(self, dataset_id: str) -> Any:
         ds = self._open(self._registry.get(dataset_id))
         return ncp.get_time_range(ds)
+
+    def get_extent(self, dataset_id: str) -> DatasetExtent:
+        """Single-call startup payload: full time axis, levels, footprint."""
+        entry = self._registry.get(dataset_id)
+        ds = self._open(entry)
+        times = ncp.get_time_values(ds)
+        if not times:
+            raise ValueError(f"dataset {dataset_id!r} has no readable time coordinate")
+        cmap = ncp.CoordinateMap(ds)
+        return DatasetExtent(
+            dataset_id=dataset_id,
+            title=entry.info.title,
+            source_type=entry.info.source_type,
+            time_range=TimeRange(start=times[0], end=times[-1], count=len(times)),
+            depth_levels=ncp.get_vertical_values(ds),
+            vertical_kind=cmap.vertical_kind,
+            vertical_units=cmap.vertical_units,
+            spatial_bounds=ncp.get_spatial_bounds(ds),
+            variables=[str(name) for name in ds.data_vars],
+        )
 
     # -- data extraction -----------------------------------------------------
 
@@ -287,3 +312,32 @@ class ModelDataService:
         if u_name is None or v_name is None:
             return None
         return u_name, v_name
+
+    async def read_slice_batch(
+        self,
+        dataset_id: str,
+        requests: list[SliceRequest],
+    ) -> list[ModelSlice]:
+        """Fetch several slices concurrently off the event loop.
+
+        Each xarray read runs in the default thread-pool executor so slow
+        disk/remote I/O never blocks other requests; results preserve the
+        request order. Any failing request fails the batch (HTTP 404/422 via
+        the standard exception handlers).
+        """
+        loop = asyncio.get_running_loop()
+        tasks = [
+            loop.run_in_executor(
+                None,
+                partial(
+                    self.read_slice,
+                    dataset_id,
+                    request.variable,
+                    time_index=request.time_index,
+                    depth_meters=request.depth_meters,
+                    bbox=request.bbox(),
+                ),
+            )
+            for request in requests
+        ]
+        return list(await asyncio.gather(*tasks))

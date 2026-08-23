@@ -310,5 +310,103 @@ class TestRealErrorContracts:
             assert r.status_code == 404
 
 
+# --- registry extents (BUG 1 / BUG 3 regressions) ----------------------------
+
+
+class TestRealRegistryExtents:
+    def test_listing_time_count_populated(
+        self, registry: DatasetRegistry, dataset_id: str
+    ) -> None:
+        """time_range.count comes from the file, never the placeholder 0."""
+        info = registry.get(dataset_id).info
+        assert info.time_range is not None
+        assert info.time_range.count == 271
+        assert info.time_range.start.startswith("2004-01-15")
+        assert info.time_range.end.startswith("2026-07-15")
+
+    def test_spatial_bounds_match_file_grid(
+        self, registry: DatasetRegistry, dataset_id: str
+    ) -> None:
+        bounds = registry.get(dataset_id).info.spatial_bounds
+        assert bounds is not None
+        # Sidecar and file agree on the footprint.
+        assert (bounds.west, bounds.east) == (30.5, 119.5)
+        assert (bounds.south, bounds.north) == (-29.5, 29.5)
+
+
+def _api_client(real_settings: Settings):  # noqa: ANN201 - TestClient
+    from fastapi.testclient import TestClient  # noqa: PLC0415
+
+    from app.main import create_app  # noqa: PLC0415
+
+    return TestClient(create_app(real_settings))
+
+
+class TestRealApiStartupEndpoints:
+    """API-level checks of the single-call startup contract on REAL data."""
+
+    def test_times_list(self, real_settings: Settings) -> None:
+        with _api_client(real_settings) as client:
+            r = client.get("/api/v1/model/incois_argo_mnt_VAM/times/list")
+            assert r.status_code == 200
+            times = r.json()
+            assert len(times) == 271
+            assert times[0].startswith("2004-01-15")
+            assert times[-1].startswith("2026-07-15")
+            assert all(isinstance(t, str) for t in times)
+
+    def test_timestamps_indexed_pairs(self, real_settings: Settings) -> None:
+        with _api_client(real_settings) as client:
+            r = client.get("/api/v1/model/incois_argo_mnt_VAM/timestamps")
+            assert r.status_code == 200
+            entries = r.json()
+            assert len(entries) == 271
+            assert entries[0] == {
+                "index": 0,
+                "iso": client.get("/api/v1/model/incois_argo_mnt_VAM/times/list").json()[0],
+            }
+            assert entries[-1]["index"] == 270
+            indexes = [e["index"] for e in entries]
+            assert indexes == list(range(271))
+
+    def test_extent_matches_metadata(self, real_settings: Settings, dataset_id: str) -> None:
+        with _api_client(real_settings) as client:
+            r = client.get(f"/api/v1/model/{dataset_id}/extent")
+            assert r.status_code == 200
+            extent = r.json()
+            assert extent["dataset_id"] == dataset_id
+            assert extent["time_range"]["count"] == 271
+            assert extent["depth_levels"] == EXPECTED_DEPTHS
+            assert extent["vertical_kind"] == "depth"
+            bounds = extent["spatial_bounds"]
+            assert (bounds["west"], bounds["east"]) == (30.5, 119.5)
+            assert (bounds["south"], bounds["north"]) == (-29.5, 29.5)
+            assert {"TEMP", "SAL"} <= set(extent["variables"])
+            # Consistent with the endpoints it summarises.
+            depths = client.get(f"/api/v1/model/{dataset_id}/depths").json()
+            assert extent["depth_levels"] == depths
+
+    def test_slice_batch_parity_with_single_slice(
+        self, real_settings: Settings, dataset_id: str
+    ) -> None:
+        params = {"variable": "temperature", "time_index": 130, "depth": 5.0}
+        with _api_client(real_settings) as client:
+            single = client.get(f"/api/v1/model/{dataset_id}/slice", params=params)
+            assert single.status_code == 200
+            batch = client.post(
+                f"/api/v1/model/{dataset_id}/slice/batch",
+                json={"slices": [params, {**params, "variable": "salinity"}]},
+            )
+            assert batch.status_code == 200
+            slices = batch.json()
+            assert len(slices) == 2
+            assert slices[0]["variable"] == "TEMP"
+            assert slices[1]["variable"] == "SAL"
+            # Byte-for-byte parity between batched and unbatched reads.
+            assert slices[0]["values"] == single.json()["values"]
+            assert slices[0]["time"] == single.json()["time"]
+            assert len(slices[1]["values"]) > 0
+
+
 def _real_file() -> Path:
     return REAL_NETCDF_FILES[0]
