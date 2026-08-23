@@ -1,4 +1,5 @@
 import { Canvas } from '@react-three/fiber'
+import { AdaptiveDpr } from '@react-three/drei'
 import * as THREE from 'three'
 import SceneManager from '@/components/Viewer3D/SceneManager'
 import VolumeRenderer from '@/components/Viewer3D/VolumeRenderer'
@@ -10,7 +11,7 @@ import CurrentArrows from '@/components/Viewer3D/CurrentArrows'
 import InstrumentMarkers from '@/components/Viewer3D/InstrumentMarkers'
 import CanvasProbe from '@/components/Viewer3D/CanvasProbe'
 
-function getRenderDpr() {
+function getMaxDpr() {
   if (typeof window === 'undefined') return 1
   const memory = Number(navigator.deviceMemory || 4)
   const cores = Number(navigator.hardwareConcurrency || 4)
@@ -23,7 +24,14 @@ function getRenderDpr() {
 export default function OceanViewer() {
   return (
     <div className="absolute inset-0">
-      <Canvas camera={{ position: [0, 80, 120], fov: 45, near: 0.1, far: 2000 }} gl={{ antialias: true, alpha: false, powerPreference: 'high-performance' }} onCreated={({ gl }) => { gl.toneMapping = THREE.ACESFilmicToneMapping; gl.setClearColor('#020b18') }} dpr={getRenderDpr()} performance={{ min: 0.5, max: 1, debounce: 250 }}>
+      <Canvas
+        camera={{ position: [0, 80, 120], fov: 45, near: 0.1, far: 2000 }}
+        gl={{ antialias: true, alpha: false, powerPreference: 'high-performance' }}
+        onCreated={({ gl }) => { gl.toneMapping = THREE.ACESFilmicToneMapping; gl.setClearColor('#020b18') }}
+        dpr={[1, getMaxDpr()]}
+        performance={{ min: 0.5, max: 1, debounce: 250 }}
+      >
+        <AdaptiveDpr pixelated />
         <SceneManager />
         <ViewportDataController />
         <OceanFloor />
