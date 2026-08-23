@@ -3,7 +3,7 @@ import { MarchingCubes } from 'three/examples/jsm/objects/MarchingCubes.js'
 import * as THREE from 'three'
 import { useOceanStore } from '@/store/oceanStore'
 import { useSliceStack } from '@/hooks/useOceanData'
-import { SCENE_DEPTH, SCENE_WIDTH, depthToY } from '@/utils/depthUtils'
+import { SCENE_WIDTH, depthToY } from '@/utils/depthUtils'
 
 const RESOLUTION = 32
 
@@ -50,7 +50,7 @@ export default function IsoSurface() {
     const topY = depthToY(depths[0], verticalExaggeration)
     const bottomY = depthToY(depths[depths.length - 1], verticalExaggeration)
     mc.position.set(0, (topY + bottomY) / 2, 0)
-    mc.scale.set(SCENE_WIDTH / 2, Math.max(1, Math.abs(bottomY - topY) / 2), SCENE_DEPTH / 2)
+    mc.scale.set(SCENE_WIDTH / 2, Math.max(1, Math.abs(bottomY - topY) / 2), SCENE_WIDTH / 2)
     mc.frustumCulled = false
     return mc
   }, [show, stack.data, depths, colorMin, colorMax, isoValue, opacity, verticalExaggeration])
