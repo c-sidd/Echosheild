@@ -4,25 +4,11 @@ import { useCurrents, useGliderStatus, useServices } from '@/hooks/useOceanData'
 
 function Toggle({ label, checked, onChange, badge, disabled }) {
   return (
-    <button
-      onClick={disabled ? undefined : onChange}
-      disabled={disabled}
-      className={`flex w-full items-center justify-between rounded-lg px-2.5 py-2 transition-colors ${
-        disabled ? 'cursor-not-allowed opacity-45' : 'hover:bg-surface/60'
-      }`}
-    >
+    <button onClick={disabled ? undefined : onChange} disabled={disabled} className={`flex w-full items-center justify-between rounded-lg px-2.5 py-2 transition-colors ${disabled ? 'cursor-not-allowed opacity-45' : 'hover:bg-surface/60'}`}>
       <span className="text-xs font-medium text-text-secondary">{label}</span>
       <span className="flex items-center gap-2">
-        {badge && (
-          <span className="rounded-full bg-surface px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-text-muted">
-            {badge}
-          </span>
-        )}
-        {checked ? (
-          <Eye className="h-4 w-4" style={{ color: 'var(--color-glow)' }} />
-        ) : (
-          <EyeOff className="h-4 w-4 text-text-muted" />
-        )}
+        {badge && <span className="rounded-full bg-surface px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-text-muted">{badge}</span>}
+        {checked ? <Eye className="h-4 w-4" style={{ color: 'var(--color-glow)' }} /> : <EyeOff className="h-4 w-4 text-text-muted" />}
       </span>
     </button>
   )
@@ -31,6 +17,8 @@ function Toggle({ label, checked, onChange, badge, disabled }) {
 export default function LayerControls() {
   const showVolume = useOceanStore((s) => s.showVolume)
   const toggleShowVolume = useOceanStore((s) => s.toggleShowVolume)
+  const showIsosurface = useOceanStore((s) => s.showIsosurface)
+  const toggleShowIsosurface = useOceanStore((s) => s.toggleShowIsosurface)
   const showArgoFloats = useOceanStore((s) => s.showArgoFloats)
   const toggleShowArgoFloats = useOceanStore((s) => s.toggleShowArgoFloats)
   const showCurrents = useOceanStore((s) => s.showCurrents)
@@ -39,52 +27,24 @@ export default function LayerControls() {
   const toggleShowGlider = useOceanStore((s) => s.toggleShowGlider)
   const showWms = useOceanStore((s) => s.showWms)
   const toggleShowWms = useOceanStore((s) => s.toggleShowWms)
-
   const datasetId = useOceanStore((s) => s.activeDatasetId)
   const timeIndex = useOceanStore((s) => s.timeIndex)
   const depth = useOceanStore((s) => s.activeDepth)
-
-  // Null datasetId while hidden keeps the query disabled (no request spam).
   const currentsQuery = useCurrents(showCurrents ? datasetId : null, timeIndex, depth, null)
   const gliderQuery = useGliderStatus()
   const servicesQuery = useServices(datasetId)
-
   const currentsAvailable = currentsQuery.data?.available === true
   const gliderConfigured = gliderQuery.data?.configured === true
   const wmsAvailable = !!servicesQuery.data?.wms
 
   return (
     <div className="space-y-0.5">
-      <Toggle
-        label="3D Volume stack"
-        checked={showVolume}
-        onChange={toggleShowVolume}
-      />
-      <Toggle
-        label="Argo Floats"
-        checked={showArgoFloats}
-        onChange={toggleShowArgoFloats}
-      />
-      <Toggle
-        label="Currents"
-        checked={showCurrents && currentsAvailable}
-        onChange={toggleShowCurrents}
-        badge={currentsAvailable ? 'Live' : 'N/A'}
-        disabled={!currentsAvailable}
-      />
-      <Toggle
-        label="Gliders"
-        checked={showGlider && gliderConfigured}
-        onChange={toggleShowGlider}
-        badge={gliderConfigured ? undefined : 'Soon'}
-      />
-      <Toggle
-        label="WMS Overlay"
-        checked={showWms && wmsAvailable}
-        onChange={toggleShowWms}
-        badge={wmsAvailable ? 'Live' : 'N/A'}
-        disabled={!wmsAvailable}
-      />
+      <Toggle label="3D Volume stack" checked={showVolume} onChange={toggleShowVolume} />
+      <Toggle label="Isosurface" checked={showIsosurface} onChange={toggleShowIsosurface} badge={showIsosurface ? 'GPU' : 'Off'} disabled={!showVolume} />
+      <Toggle label="Argo Floats" checked={showArgoFloats} onChange={toggleShowArgoFloats} />
+      <Toggle label="Currents" checked={showCurrents && currentsAvailable} onChange={toggleShowCurrents} badge={currentsAvailable ? 'Live' : 'N/A'} disabled={!currentsAvailable} />
+      <Toggle label="Gliders" checked={showGlider && gliderConfigured} onChange={toggleShowGlider} badge={gliderConfigured ? undefined : 'Soon'} />
+      <Toggle label="WMS Overlay" checked={showWms && wmsAvailable} onChange={toggleShowWms} badge={wmsAvailable ? 'Live' : 'N/A'} disabled={!wmsAvailable} />
     </div>
   )
 }
