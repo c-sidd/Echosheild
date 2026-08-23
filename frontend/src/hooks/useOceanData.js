@@ -23,8 +23,7 @@ export function selectRenderDepths(depths, activeDepth, maxDepths = MAX_RENDER_D
   }
   const values = [...selected].sort((a, b) => a - b)
   while (values.length > maxDepths) {
-    let removeAt = -1
-    let largestGap = -1
+    let removeAt = -1; let largestGap = -1
     for (let i = 1; i < values.length - 1; i += 1) {
       if (Number.isFinite(activeDepth) && values[i] === activeDepth) continue
       const gap = Math.min(values[i] - values[i - 1], values[i + 1] - values[i])
@@ -45,17 +44,23 @@ export function useExtent(id) { return useQuery({ queryKey: ['extent', id], quer
 export function useTimesList(id) { return useQuery({ queryKey: ['times-list', id], queryFn: ({ signal }) => model.fetchTimesList(id, signal), enabled: !!id, staleTime: LONG }) }
 
 export const sliceKey = (id, variable, timeIndex, depth, bbox) => ['slice', id, variable, timeIndex, depth, bbox ?? null]
-export function useSlice(id, variable, timeIndex, depth, bbox) {
-  return useQuery({ queryKey: sliceKey(id, variable, timeIndex, depth, bbox), queryFn: ({ signal }) => model.fetchSlice(id, variable, timeIndex, depth, bbox, signal), enabled: !!id && !!variable, staleTime: SLICE_STALE, placeholderData: (prev) => prev })
-}
-export const sliceStackKey = (id, variable, timeIndex, depths = null) => ['slice-stack', id, variable, timeIndex, depths]
+export function useSlice(id, variable, timeIndex, depth, bbox) { return useQuery({ queryKey: sliceKey(id, variable, timeIndex, depth, bbox), queryFn: ({ signal }) => model.fetchSlice(id, variable, timeIndex, depth, bbox, signal), enabled: !!id && !!variable, staleTime: SLICE_STALE, placeholderData: (prev) => prev }) }
+export const sliceStackKey = (id, variable, timeIndex, depths = null, bbox = null) => ['slice-stack', id, variable, timeIndex, depths, bbox]
 
-export async function fetchSliceStack(queryClient, id, variable, timeIndex, activeDepth = null, signal) {
+export async function fetchSliceStack(queryClient, id, variable, timeIndex, activeDepth = null, bbox = null, signal) {
   const depths = await queryClient.fetchQuery({ queryKey: ['depths', id], queryFn: ({ signal: depthSignal }) => model.fetchDepths(id, depthSignal), staleTime: LONG })
   const renderDepths = selectRenderDepths(depths, activeDepth)
   const results = []
   for (let offset = 0; offset < renderDepths.length; offset += 10) {
-    const chunk = renderDepths.slice(offset, offset + 10).map((depth) => ({ variable, time_index: timeIndex, depth_meters: depth }))
+    const chunk = renderDepths.slice(offset, offset + 10).map((depth) => ({
+      variable,
+      time_index: timeIndex,
+      depth_meters: depth,
+      west: bbox?.west,
+      east: bbox?.east,
+      south: bbox?.south,
+      north: bbox?.north,
+    }))
     const batch = await model.fetchSliceBatch(id, chunk, signal)
     results.push(...(Array.isArray(batch) ? batch : []))
   }
@@ -65,14 +70,16 @@ export async function fetchSliceStack(queryClient, id, variable, timeIndex, acti
 export function useSliceStack(id, variable, timeIndex, activeDepth = null) {
   const queryClient = useQueryClient()
   const depths = useOceanStore((s) => s.depths)
+  const bbox = useOceanStore((s) => s.bbox)
   const renderDepths = selectRenderDepths(depths, activeDepth)
-  return useQuery({ queryKey: sliceStackKey(id, variable, timeIndex, renderDepths), queryFn: ({ signal }) => fetchSliceStack(queryClient, id, variable, timeIndex, activeDepth, signal), enabled: !!id && !!variable, staleTime: SLICE_STALE })
+  return useQuery({ queryKey: sliceStackKey(id, variable, timeIndex, renderDepths, bbox), queryFn: ({ signal }) => fetchSliceStack(queryClient, id, variable, timeIndex, activeDepth, bbox, signal), enabled: !!id && !!variable, staleTime: SLICE_STALE })
 }
 
 export function prefetchSliceStack(queryClient, id, variable, timeIndex, activeDepth = null) {
   if (!id || !variable || !Number.isFinite(timeIndex)) return
-  const depths = selectRenderDepths(useOceanStore.getState().depths, activeDepth ?? useOceanStore.getState().activeDepth)
-  void queryClient.prefetchQuery({ queryKey: sliceStackKey(id, variable, timeIndex, depths), queryFn: ({ signal }) => fetchSliceStack(queryClient, id, variable, timeIndex, activeDepth, signal), staleTime: SLICE_STALE })
+  const state = useOceanStore.getState()
+  const depths = selectRenderDepths(state.depths, activeDepth ?? state.activeDepth)
+  void queryClient.prefetchQuery({ queryKey: sliceStackKey(id, variable, timeIndex, depths, state.bbox), queryFn: ({ signal }) => fetchSliceStack(queryClient, id, variable, timeIndex, activeDepth, state.bbox, signal), staleTime: SLICE_STALE })
 }
 export function prefetchSlices(queryClient, id, variable, timeIndexes, depth, bbox) {
   if (!id || !variable || !Number.isFinite(depth)) return
