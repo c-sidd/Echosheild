@@ -7,10 +7,10 @@ function getWorker() {
   worker = new Worker(new URL('./textureWorker.js', import.meta.url), { type: 'module' })
   worker.onmessage = (event) => {
     const { id, pixels } = event.data
-    const resolve = pending.get(id)
-    if (!resolve) return
+    const handlers = pending.get(id)
+    if (!handlers) return
     pending.delete(id)
-    resolve(new Uint8Array(pixels))
+    handlers.resolve(new Uint8Array(pixels))
   }
   worker.onerror = (error) => {
     for (const [, handlers] of pending) handlers.reject(error)
@@ -25,16 +25,12 @@ export function valuesToTextureAsync(values, lut, min, max, width, height, opaci
   return new Promise((resolve, reject) => {
     const id = nextId++
     pending.set(id, { resolve, reject })
-    getWorker().postMessage({
-      id,
-      values,
-      lut: Array.from(lut),
-      min,
-      max,
-      width,
-      height,
-      opacity,
-    })
+    try {
+      getWorker().postMessage({ id, values, lut: Array.from(lut), min, max, width, height, opacity })
+    } catch (error) {
+      pending.delete(id)
+      reject(error)
+    }
   })
 }
 
