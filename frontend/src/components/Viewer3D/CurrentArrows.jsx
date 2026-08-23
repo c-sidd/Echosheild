@@ -4,7 +4,12 @@ import * as THREE from 'three'
 import { useOceanStore } from '@/store/oceanStore'
 import { useCurrents } from '@/hooks/useOceanData'
 import { buildLUT } from '@/utils/colorUtils'
-import { makeDomainMapping, depthToY } from '@/utils/depthUtils'
+import {
+  makeDomainMapping,
+  depthToY,
+  SCENE_HALF_W,
+  SCENE_HALF_D,
+} from '@/utils/depthUtils'
 
 export default function CurrentArrows() {
   const show = useOceanStore((s) => s.showCurrents)
@@ -12,7 +17,7 @@ export default function CurrentArrows() {
   const timeIndex = useOceanStore((s) => s.timeIndex)
   const depth = useOceanStore((s) => s.activeDepth)
   const verticalExaggeration = useOceanStore((s) => s.verticalExaggeration)
-  const currentsQuery = useCurrents(datasetId, timeIndex, depth, null)
+  const currentsQuery = useCurrents(show ? datasetId : null, timeIndex, depth, null)
 
   if (!show || !currentsQuery.data?.available) return null
 
@@ -97,6 +102,3 @@ function Particles({ field, verticalExaggeration }) {
     <points ref={pointsRef} geometry={geometry} material={material} frustumCulled={false} />
   )
 }
-
-const SCENE_HALF_W = 62
-const SCENE_HALF_D = 42

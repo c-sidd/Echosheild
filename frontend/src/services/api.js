@@ -46,3 +46,12 @@ async function request(path, options = {}) {
 export function get(path, options = {}) {
   return request(path, { method: 'GET', ...options })
 }
+
+export function post(path, body, options = {}) {
+  return request(path, {
+    method: 'POST',
+    body: JSON.stringify(body),
+    headers: { 'Content-Type': 'application/json' },
+    ...options,
+  })
+}

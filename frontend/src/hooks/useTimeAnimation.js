@@ -1,10 +1,8 @@
 import { useEffect, useRef } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useOceanStore } from '@/store/oceanStore'
-import {
-  prefetchSliceStack,
-  prefetchSlices,
-} from '@/hooks/useOceanData'
+import { prefetchSliceStack, SLICE_STALE } from '@/hooks/useOceanData'
+import { fetchSliceBatch } from '@/services/modelService'
 
 export function useTimeAnimation() {
   const queryClient = useQueryClient()
@@ -18,7 +16,6 @@ export function useTimeAnimation() {
   const datasetId = useOceanStore((s) => s.activeDatasetId)
   const variable = useOceanStore((s) => s.activeVariable)
   const depth = useOceanStore((s) => s.activeDepth)
-  const bbox = useOceanStore((s) => s.bbox)
   const viewMode = useOceanStore((s) => s.viewMode)
 
   useEffect(() => {
@@ -50,23 +47,24 @@ export function useTimeAnimation() {
     if (!datasetId || !variable) return
     const maxIndex = count - 1
 
-    if (viewMode === '3D') {
-      prefetchSliceStack(queryClient, datasetId, variable, wrap(timeIndex + 1))
-    } else {
-      prefetchSlices(
-        queryClient,
-        datasetId,
-        variable,
-        [timeIndex + 1, timeIndex + 2, timeIndex + 3].map(wrap),
-        depth,
-        bbox,
-      )
-    }
-
     function wrap(i) {
       return count > 0 && i > maxIndex ? i % count : Math.max(0, i)
     }
-  }, [queryClient, datasetId, variable, timeIndex, count, depth, bbox, viewMode])
+
+    if (viewMode === '3D') {
+      prefetchSliceStack(queryClient, datasetId, variable, wrap(timeIndex + 1))
+    } else if (Number.isFinite(depth)) {
+      // One round-trip instead of three parallel slice requests.
+      const batch = [timeIndex + 1, timeIndex + 2, timeIndex + 3]
+        .map(wrap)
+        .map((t) => ({ variable, time_index: t, depth_meters: depth }))
+      void queryClient.fetchQuery({
+        queryKey: ['slice-batch-prefetch', datasetId, variable, timeIndex, depth],
+        queryFn: ({ signal }) => fetchSliceBatch(datasetId, batch, signal),
+        staleTime: SLICE_STALE,
+      })
+    }
+  }, [queryClient, datasetId, variable, timeIndex, count, depth, viewMode])
 
   // Keep the rAF-driven lastStep in sync for external consumers.
   useEffect(() => {

@@ -3,8 +3,10 @@ import * as THREE from 'three'
 import SceneManager from '@/components/Viewer3D/SceneManager'
 import VolumeRenderer from '@/components/Viewer3D/VolumeRenderer'
 import OceanSurface from '@/components/Viewer3D/OceanSurface'
+import OceanFloor from '@/components/Viewer3D/OceanFloor'
 import CurrentArrows from '@/components/Viewer3D/CurrentArrows'
 import InstrumentMarkers from '@/components/Viewer3D/InstrumentMarkers'
+import CanvasProbe from '@/components/Viewer3D/CanvasProbe'
 
 export default function OceanViewer() {
   return (
@@ -23,10 +25,12 @@ export default function OceanViewer() {
         dpr={[1, 2]}
       >
         <SceneManager />
+        <OceanFloor />
         <VolumeRenderer />
         <OceanSurface />
         <CurrentArrows />
         <InstrumentMarkers />
+        <CanvasProbe />
       </Canvas>
     </div>
   )

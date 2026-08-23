@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
 import {
   Play,
@@ -10,11 +11,14 @@ import {
 } from 'lucide-react'
 import gsap from 'gsap'
 import { useOceanStore } from '@/store/oceanStore'
+import { fetchSliceBatch } from '@/services/modelService'
 import { formatMonthYear } from '@/utils/formatters'
 
 const SPEEDS = [0.5, 1, 2, 5]
+const SPARK_POINTS = 24
 
 export default function TimeControls() {
+  const queryClient = useQueryClient()
   const timeRange = useOceanStore((s) => s.timeRange)
   const timeIndex = useOceanStore((s) => s.timeIndex)
   const setTimeIndex = useOceanStore((s) => s.setTimeIndex)
@@ -32,16 +36,70 @@ export default function TimeControls() {
   const endISO = useOceanStore(
     (s) => s.datasets.find((d) => d.id === s.activeDatasetId)?.time_range?.end,
   )
+  const datasetId = useOceanStore((s) => s.activeDatasetId)
+  const activeVariable = useOceanStore((s) => s.activeVariable)
+  const depths = useOceanStore((s) => s.depths)
+  const timestampsList = useOceanStore((s) => s.timestampsList)
 
-  const currentTimeISO = useOceanStore((s) => {
-    if (!s.timeRange?.count || !timeRange) return null
-    const start = new Date(startISO ?? Date.now())
-    const end = new Date(endISO ?? Date.now())
-    if (Number.isNaN(start.getTime())) return null
-    const span = end.getTime() - start.getTime()
-    const t = count > 1 ? timeIndex / (count - 1) : 0
-    return new Date(start.getTime() + t * span).toISOString()
-  })
+  // Real timestamp at this index; linear interpolation only as a fallback
+  // while the full time axis is still downloading.
+  const currentTimeISO =
+    timestampsList[timeIndex] ??
+    interpolateISO(startISO, endISO, timeIndex, count)
+
+  // Sparkline of surface means sampled across the whole time axis — a few
+  // batch requests (server caps batches at 10), then cached forever.
+  const [sparkData, setSparkData] = useState([])
+  useEffect(() => {
+    if (!datasetId || !activeVariable || count < SPARK_POINTS) return
+    const depth = depths[0]
+    if (!Number.isFinite(depth)) return
+    const step = Math.floor(count / SPARK_POINTS)
+    const indexes = Array.from({ length: SPARK_POINTS }, (_, i) => i * step)
+    const controller = new AbortController()
+    let cancelled = false
+    queryClient
+      .fetchQuery({
+        queryKey: ['sparkline', datasetId, activeVariable],
+        queryFn: async ({ signal }) => {
+          const batches = []
+          for (let i = 0; i < indexes.length; i += 10) {
+            batches.push(
+              fetchSliceBatch(
+                datasetId,
+                indexes.slice(i, i + 10).map((t) => ({
+                  variable: activeVariable,
+                  time_index: t,
+                  depth_meters: depth,
+                })),
+                signal ?? controller.signal,
+              ),
+            )
+          }
+          return (await Promise.all(batches)).flat()
+        },
+        staleTime: Infinity,
+      })
+      .then((slices) => {
+        if (!cancelled && Array.isArray(slices)) {
+          setSparkData(slices.map(meanOf))
+        }
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+      controller.abort()
+    }
+  }, [queryClient, datasetId, activeVariable, count, depths])
+
+  const sparkStats = useMemo(() => normalizeSpark(sparkData), [sparkData])
+  const activeSparkIndex =
+    sparkData.length > 1
+      ? Math.min(
+          Math.floor((timeIndex / count) * sparkData.length),
+          sparkData.length - 1,
+        )
+      : -1
 
   // Number-roll animation on the date readout.
   useEffect(() => {
@@ -171,6 +229,24 @@ export default function TimeControls() {
         </div>
       </div>
 
+      {sparkData.length > 1 && (
+        <div className="mb-1 flex h-6 items-end gap-[1px]">
+          {sparkStats.bars.map((v, i) => (
+            <div
+              key={i}
+              className="flex-1 rounded-sm opacity-60 transition-all"
+              style={{
+                height: `${Math.max(4, v * 24)}px`,
+                background:
+                  i === activeSparkIndex
+                    ? 'var(--color-glow)'
+                    : 'rgba(0,212,255,0.35)',
+              }}
+            />
+          ))}
+        </div>
+      )}
+
       <div
         className="relative mt-3 h-2 cursor-pointer select-none rounded-full bg-surface"
         onMouseDown={(e) => {
@@ -220,4 +296,46 @@ function IconBtn({ children, onClick, title }) {
       {children}
     </button>
   )
+}
+
+function interpolateISO(startISO, endISO, timeIndex, count) {
+  if (!count || !startISO || endISO == null) return null
+  const start = new Date(startISO)
+  const end = new Date(endISO)
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return null
+  const span = end.getTime() - start.getTime()
+  const t = count > 1 ? timeIndex / (count - 1) : 0
+  return new Date(start.getTime() + t * span).toISOString()
+}
+
+function meanOf(slice) {
+  if (!Array.isArray(slice?.values)) return null
+  let sum = 0
+  let n = 0
+  for (const row of slice.values) {
+    for (const v of row) {
+      if (v != null && Number.isFinite(v)) {
+        sum += v
+        n += 1
+      }
+    }
+  }
+  return n > 0 ? sum / n : null
+}
+
+function normalizeSpark(data) {
+  const finite = data.filter((v) => Number.isFinite(v))
+  if (!finite.length) return { bars: [] }
+  let min = Infinity
+  let max = -Infinity
+  for (const v of finite) {
+    if (v < min) min = v
+    if (v > max) max = v
+  }
+  const span = max - min || 1
+  return {
+    bars: data.map((v) =>
+      Number.isFinite(v) ? Math.min(Math.max((v - min) / span, 0.08), 1) : 0,
+    ),
+  }
 }

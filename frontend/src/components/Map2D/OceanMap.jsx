@@ -74,8 +74,8 @@ export default function OceanMap() {
 
   const layers = [
     new TileLayer({
-      id: 'base-tiles',
-      data: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+      id: 'dark-ocean-base',
+      data: 'https://basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}@2x.png',
       minZoom: 0,
       maxZoom: 19,
       tileSize: 256,

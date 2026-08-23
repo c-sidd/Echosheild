@@ -1,4 +1,4 @@
-import { get } from './api'
+import { get, post } from './api'
 
 export function fetchDatasets(signal) {
   return get('/model/datasets', { signal })
@@ -18,6 +18,14 @@ export function fetchTimes(id, signal) {
 
 export function fetchDepths(id, signal) {
   return get(`/model/${encodeURIComponent(id)}/depths`, { signal })
+}
+
+export function fetchExtent(id, signal) {
+  return get(`/model/${encodeURIComponent(id)}/extent`, { signal })
+}
+
+export function fetchTimesList(id, signal) {
+  return get(`/model/${encodeURIComponent(id)}/times/list`, { signal })
 }
 
 function bboxQuery(bbox) {
@@ -42,6 +50,14 @@ export function slicePath(id, variable, timeIndex, depth, bbox) {
 
 export function fetchSlice(id, variable, timeIndex, depth, bbox, signal) {
   return get(slicePath(id, variable, timeIndex, depth, bbox), { signal })
+}
+
+export function fetchSliceBatch(id, slices, signal) {
+  return post(
+    `/model/${encodeURIComponent(id)}/slice/batch`,
+    { slices },
+    { signal }
+  )
 }
 
 export function profilePath(id, variable, lat, lon, timeIndex) {

@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { useThree } from '@react-three/fiber'
-import { OrbitControls, Stars } from '@react-three/drei'
+import { OrbitControls, Stars, Grid } from '@react-three/drei'
 import {
   EffectComposer,
   Bloom,
@@ -69,6 +69,21 @@ export default function SceneManager() {
       <hemisphereLight args={['#0a2a4a', '#01060e', 0.25]} />
 
       <Stars radius={300} depth={60} count={3000} factor={4} saturation={0} fade speed={0.6} />
+
+      {/* Lat/lon-style coordinate overlay on the ocean surface */}
+      <Grid
+        position={[0, 0.1, 0]}
+        args={[130, 90]}
+        cellSize={10}
+        cellThickness={0.3}
+        cellColor="#0a2a4a"
+        sectionSize={30}
+        sectionThickness={0.5}
+        sectionColor="#0d3a5a"
+        fadeDistance={200}
+        fadeStrength={2}
+        infiniteGrid={false}
+      />
 
       <fog attach="fog" args={['#020b18', 220, 700]} />
 

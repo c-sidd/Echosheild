@@ -70,8 +70,10 @@ export default function OceanSurface() {
       material.uniforms.time.value += delta * 0.4
     }
     // Gentle breathing bob just above the shallowest slice.
-    waterRef.current.position.y =
-      -0.4 + Math.sin(performance.now() * 0.0006) * 0.15
+    if (waterRef.current) {
+      waterRef.current.position.y =
+        -0.4 + Math.sin(performance.now() * 0.0006) * 0.15
+    }
   })
 
   return (

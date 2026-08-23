@@ -8,7 +8,7 @@ import { useOceanStore } from '@/store/oceanStore'
 
 const MIN = 5 * 60 * 1000
 const LONG = 30 * 60 * 1000
-const SLICE_STALE = 10 * 60 * 1000
+export const SLICE_STALE = 10 * 60 * 1000
 
 export function useDatasets() {
   return useQuery({
@@ -49,6 +49,24 @@ export function useDepths(id) {
   return useQuery({
     queryKey: ['depths', id],
     queryFn: ({ signal }) => model.fetchDepths(id, signal),
+    enabled: !!id,
+    staleTime: LONG,
+  })
+}
+
+export function useExtent(id) {
+  return useQuery({
+    queryKey: ['extent', id],
+    queryFn: ({ signal }) => model.fetchExtent(id, signal),
+    enabled: !!id,
+    staleTime: LONG,
+  })
+}
+
+export function useTimesList(id) {
+  return useQuery({
+    queryKey: ['times-list', id],
+    queryFn: ({ signal }) => model.fetchTimesList(id, signal),
     enabled: !!id,
     staleTime: LONG,
   })
@@ -244,25 +262,40 @@ async function fetchHealth(path, signal) {
 export function useDatasetSync() {
   const id = useOceanStore((s) => s.activeDatasetId)
   useMetadata(id)
-  const times = useTimes(id)
-  const depths = useDepths(id)
-  const variables = useVariables(id)
+  const extentQuery = useExtent(id)
+  const timesListQuery = useTimesList(id)
+  const variablesQuery = useVariables(id)
+
+  // Single-call startup: time range + depth levels arrive together.
+  useEffect(() => {
+    const ext = extentQuery.data
+    if (!ext) return
+    const store = useOceanStore.getState()
+    if (ext.time_range) store.setTimeRange(ext.time_range)
+    if (Array.isArray(ext.depth_levels) && ext.depth_levels.length) {
+      store.setDepths(ext.depth_levels)
+    }
+    if (ext.vertical_kind) store.setVerticalKind(ext.vertical_kind)
+    // Extent only carries variable names — seed minimal entries so the UI
+    // can render immediately; rich metadata below replaces them.
+    const current = useOceanStore.getState().variables
+    if (!current.length && Array.isArray(ext.variables) && ext.variables.length) {
+      store.setVariables(
+        ext.variables.map((v) => (typeof v === 'string' ? { name: v, canonical_name: v } : v)),
+      )
+    }
+  }, [extentQuery.data])
+
+  // Rich variable metadata (units, source names) once available.
+  useEffect(() => {
+    if (Array.isArray(variablesQuery.data) && variablesQuery.data.length) {
+      useOceanStore.getState().setVariables(variablesQuery.data)
+    }
+  }, [variablesQuery.data])
 
   useEffect(() => {
-    if (times.data?.start && times.data?.end != null) {
-      useOceanStore.getState().setTimeRange(times.data)
+    if (Array.isArray(timesListQuery.data)) {
+      useOceanStore.getState().setTimestampsList(timesListQuery.data)
     }
-  }, [times.data])
-
-  useEffect(() => {
-    if (Array.isArray(depths.data) && depths.data.length) {
-      useOceanStore.getState().setDepths(depths.data)
-    }
-  }, [depths.data])
-
-  useEffect(() => {
-    if (Array.isArray(variables.data)) {
-      useOceanStore.getState().setVariables(variables.data)
-    }
-  }, [variables.data])
+  }, [timesListQuery.data])
 }

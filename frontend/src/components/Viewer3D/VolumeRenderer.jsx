@@ -128,7 +128,15 @@ export default function VolumeRenderer() {
 
   const stack = useSliceStack(datasetId, variable, timeIndex)
 
-  if (!showVolume || stack.isLoading || !Array.isArray(stack.data) || !depths.length) {
+  // Signal "real data on screen" so the loading overlay can retire.
+  const dataReady = Array.isArray(stack.data) && stack.data.length > 0
+  useEffect(() => {
+    if (dataReady && showVolume) {
+      useOceanStore.getState().setDataLoadedAt(Date.now())
+    }
+  }, [dataReady, showVolume])
+
+  if (!showVolume || stack.isLoading || !dataReady || !depths.length) {
     return null
   }
 

@@ -11,6 +11,7 @@ export const useOceanStore = create((set, get) => ({
   activeVariable: 'temperature',
 
   timeRange: null,
+  timestampsList: [],
   timeIndex: DEFAULT_TIME_INDEX,
   isPlaying: false,
   playSpeed: 1,
@@ -42,6 +43,7 @@ export const useOceanStore = create((set, get) => ({
   upstream503Message: '',
 
   dataLoadedAt: null,
+  setDataLoadedAt: (ts) => set({ dataLoadedAt: ts }),
 
   setDatasets: (datasets) => {
     set({ datasets })
@@ -57,6 +59,7 @@ export const useOceanStore = create((set, get) => ({
       activeDatasetId: id,
       variables: [],
       timeRange: null,
+      timestampsList: [],
       depths: [],
       activeDepth: 5.0,
       timeIndex: DEFAULT_TIME_INDEX,
@@ -85,6 +88,12 @@ export const useOceanStore = create((set, get) => ({
     if (prev?.count !== timeRange?.count) {
       clampTimeIndex()
     }
+  },
+
+  setTimestampsList: (timestampsList) => {
+    if (!Array.isArray(timestampsList)) return
+    if (timestampsList.length === get().timestampsList.length) return
+    set({ timestampsList })
   },
 
   stepTime: (delta) => {
