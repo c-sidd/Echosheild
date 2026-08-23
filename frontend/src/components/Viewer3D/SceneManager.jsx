@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { useThree } from '@react-three/fiber'
-import { OrbitControls, Stars, Grid } from '@react-three/drei'
+import { OrbitControls, Grid } from '@react-three/drei'
 import { EffectComposer, Bloom, Vignette } from '@react-three/postprocessing'
 import gsap from 'gsap'
 import { useOceanStore } from '@/store/oceanStore'
@@ -37,7 +37,7 @@ export default function SceneManager() {
   }, [bounds?.west, bounds?.east, bounds?.south, bounds?.north, camera])
 
   useEffect(() => {
-    if (!controlsRef.current) return undefined
+    if (!controlsRef.current || !Number.isFinite(activeDepth)) return undefined
     gsap.to(controlsRef.current.target, {
       y: -(activeDepth / 2000) * 30,
       duration: 0.45,
@@ -53,18 +53,18 @@ export default function SceneManager() {
       <directionalLight position={[50, 200, 50]} intensity={0.8} color="#4dd9ff" />
       <hemisphereLight args={['#0a2a4a', '#01060e', 0.25]} />
 
-      <Stars radius={300} depth={60} count={900} factor={3} saturation={0} fade speed={0.25} />
-
+      {/* Orientation aid only; keep the grid deliberately sparse because it
+          competes with scientific layers and adds unnecessary line work. */}
       <Grid
         position={[0, 0.1, 0]}
         args={[130, 90]}
-        cellSize={10}
-        cellThickness={0.3}
+        cellSize={15}
+        cellThickness={0.18}
         cellColor="#0a2a4a"
-        sectionSize={30}
-        sectionThickness={0.5}
+        sectionSize={45}
+        sectionThickness={0.35}
         sectionColor="#0d3a5a"
-        fadeDistance={180}
+        fadeDistance={150}
         fadeStrength={2}
         infiniteGrid={false}
       />
@@ -81,8 +81,6 @@ export default function SceneManager() {
         target={[0, -12, 0]}
       />
 
-      {/* Scientific mode intentionally keeps post-processing minimal. DOF,
-          chromatic aberration and noise add GPU passes without improving data. */}
       <EffectComposer multisampling={0}>
         <Bloom luminanceThreshold={0.45} luminanceSmoothing={0.9} intensity={0.65} />
         <Vignette eskil={false} offset={0.12} darkness={0.45} />
