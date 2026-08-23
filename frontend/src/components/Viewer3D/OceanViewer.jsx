@@ -2,6 +2,7 @@ import { Canvas } from '@react-three/fiber'
 import * as THREE from 'three'
 import SceneManager from '@/components/Viewer3D/SceneManager'
 import VolumeRenderer from '@/components/Viewer3D/VolumeRenderer'
+import IsosurfaceRenderer from '@/components/Viewer3D/IsosurfaceRenderer'
 import OceanSurface from '@/components/Viewer3D/OceanSurface'
 import OceanFloor from '@/components/Viewer3D/OceanFloor'
 import CurrentArrows from '@/components/Viewer3D/CurrentArrows'
@@ -23,11 +24,7 @@ export default function OceanViewer() {
     <div className="absolute inset-0">
       <Canvas
         camera={{ position: [0, 80, 120], fov: 45, near: 0.1, far: 2000 }}
-        gl={{
-          antialias: true,
-          alpha: false,
-          powerPreference: 'high-performance',
-        }}
+        gl={{ antialias: true, alpha: false, powerPreference: 'high-performance' }}
         onCreated={({ gl }) => {
           gl.toneMapping = THREE.ACESFilmicToneMapping
           gl.setClearColor('#020b18')
@@ -38,6 +35,7 @@ export default function OceanViewer() {
         <SceneManager />
         <OceanFloor />
         <VolumeRenderer />
+        <IsosurfaceRenderer />
         <OceanSurface />
         <CurrentArrows />
         <InstrumentMarkers />
