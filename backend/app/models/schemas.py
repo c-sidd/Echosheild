@@ -10,23 +10,13 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-DatasetSourceType = Literal[
-    "local",
-    "thredds",
-    "erddap_remote",
-    "erddap_tabledap",
-]
-
+DatasetSourceType = Literal["local", "thredds", "erddap_remote", "erddap_tabledap"]
 VerticalKind = Literal["depth", "pressure", "other"]
 
-
 class CurrentsUnavailable(BaseModel):
-    """Explicit response when a dataset has no current-vector variables."""
-
     dataset_id: str
     available: Literal[False] = False
     reason: str
-
 
 class CoordinateMetadata(BaseModel):
     name: str
@@ -35,7 +25,6 @@ class CoordinateMetadata(BaseModel):
     size: int
     min_value: float | None = None
     max_value: float | None = None
-
 
 class VariableMetadata(BaseModel):
     name: str
@@ -46,22 +35,12 @@ class VariableMetadata(BaseModel):
     dimensions: list[str]
     shape: list[int]
 
-
 class TimeRange(BaseModel):
     start: str
     end: str
     count: int
 
-
 class DepthRange(BaseModel):
-    """Vertical extent.
-
-    ``vertical_kind`` distinguishes true depth (meters) from pressure
-    coordinates (e.g. dbar). When ``vertical_kind == "pressure"`` the
-    ``min_meters`` / ``max_meters`` fields carry *pressure* values in
-    ``vertical_units`` — no silent unit conversion is applied.
-    """
-
     min_meters: float
     max_meters: float
     count: int
@@ -69,13 +48,11 @@ class DepthRange(BaseModel):
     vertical_kind: VerticalKind = "depth"
     vertical_units: str | None = None
 
-
 class SpatialBounds(BaseModel):
     west: float
     east: float
     south: float
     north: float
-
 
 class ServiceEndpoints(BaseModel):
     dataset_id: str
@@ -86,7 +63,6 @@ class ServiceEndpoints(BaseModel):
     wcs: str | None = None
     thredds_catalog: str | None = None
     http_download: str | None = None
-
 
 class DatasetInfo(BaseModel):
     id: str
@@ -101,7 +77,6 @@ class DatasetInfo(BaseModel):
     spatial_bounds: SpatialBounds | None = None
     services: ServiceEndpoints | None = None
 
-
 class DatasetMetadata(BaseModel):
     id: str
     title: str
@@ -112,14 +87,12 @@ class DatasetMetadata(BaseModel):
     dimensions: dict[str, int]
     variables: list[VariableMetadata]
     coordinates: list[CoordinateMetadata]
-    # canonical -> source coordinate name (e.g. {"time": "TAXIS", ...})
     coordinate_mapping: dict[str, str] = Field(default_factory=dict)
     global_attributes: dict[str, Any] = Field(default_factory=dict)
     time_range: TimeRange | None = None
     depth_range: DepthRange | None = None
     spatial_bounds: SpatialBounds | None = None
     services: ServiceEndpoints | None = None
-
 
 class ModelSlice(BaseModel):
     dataset_id: str
@@ -129,27 +102,18 @@ class ModelSlice(BaseModel):
     time_index: int | None = None
     time: str | None = None
     depth_meters: float | None = None
-    # ``vertical_kind`` documents whether depth_meters carries meters ("depth"),
-    # pressure values in vertical_units ("pressure"), or nothing ("other").
     vertical_kind: VerticalKind | None = None
     vertical_units: str | None = None
     latitude: list[float]
     longitude: list[float]
-    # values[i][j] -> latitude i, longitude j (NaN-safe: missing cells are null)
     values: list[list[float | None]]
     downsampling: dict[str, int] = Field(default_factory=dict)
 
-
 class TimestampEntry(BaseModel):
-    """One entry of a dataset's decoded time axis (index ↔ ISO-8601)."""
-
     index: int
     iso: str
 
-
 class SliceRequest(BaseModel):
-    """One slice specification inside a batch request."""
-
     variable: str
     time_index: int | None = Field(default=None, ge=0)
     depth_meters: float | None = None
@@ -159,13 +123,12 @@ class SliceRequest(BaseModel):
     north: float | None = Field(default=None, ge=-90, le=90)
 
     def bbox(self) -> tuple[float, float, float, float] | None:
-        """Validated ``(west, east, south, north)``, or ``None`` when unset."""
         values = [self.west, self.east, self.south, self.north]
         if all(v is None for v in values):
             return None
         if any(v is None for v in values):
             raise ValueError("bbox requires all of west, east, south and north")
-        assert self.west is not None and self.east is not None  # narrowed above
+        assert self.west is not None and self.east is not None
         assert self.south is not None and self.north is not None
         if not (-180 <= self.west < self.east <= 360):
             raise ValueError(f"invalid longitude bounds: west={self.west}, east={self.east}")
@@ -173,20 +136,10 @@ class SliceRequest(BaseModel):
             raise ValueError(f"invalid latitude bounds: south={self.south}, north={self.north}")
         return (self.west, self.east, self.south, self.north)
 
-
 class SliceBatchRequest(BaseModel):
-    """Batch of horizontal slices fetched in one round-trip."""
-
     slices: list[SliceRequest] = Field(..., min_length=1, max_length=10)
 
-
 class DatasetExtent(BaseModel):
-    """Single-call startup payload describing everything renderable.
-
-    Combines the time axis, vertical levels and spatial footprint so the
-    frontend can initialise sliders/viewports without opening the dataset.
-    """
-
     dataset_id: str
     title: str | None = None
     source_type: DatasetSourceType = "local"
@@ -196,7 +149,6 @@ class DatasetExtent(BaseModel):
     vertical_units: str | None = None
     spatial_bounds: SpatialBounds | None = None
     variables: list[str]
-
 
 class OceanProfile(BaseModel):
     dataset_id: str
@@ -211,7 +163,6 @@ class OceanProfile(BaseModel):
     vertical_units: str | None = None
     values: list[float | None]
 
-
 class PointSample(BaseModel):
     dataset_id: str
     latitude: float
@@ -223,7 +174,6 @@ class PointSample(BaseModel):
     nearest_grid: dict[str, float] = Field(default_factory=dict)
     values: dict[str, float | None]
     units: dict[str, str | None]
-
 
 class CurrentVectorField(BaseModel):
     dataset_id: str
@@ -239,16 +189,13 @@ class CurrentVectorField(BaseModel):
     v: list[list[float | None]]
     max_speed_ms: float | None = None
 
-
 class HealthStatus(BaseModel):
     status: str
     service: str
     version: str
     environment: str
-    # Importability of heavy/optional scientific packages (no side effects).
     optional_dependencies: dict[str, str] = Field(default_factory=dict)
     thredds_configured: bool = False
-
 
 class DependencyStatus(BaseModel):
     name: str
@@ -256,12 +203,10 @@ class DependencyStatus(BaseModel):
     detail: str | None = None
     latency_ms: float | None = None
 
-
 class ReadinessStatus(BaseModel):
     ready: bool
     service: str
     checks: list[DependencyStatus]
-
 
 class ArgoFloatSummary(BaseModel):
     platform_wmo: int
@@ -269,13 +214,11 @@ class ArgoFloatSummary(BaseModel):
     last_location: tuple[float, float] | None = None
     last_time: str | None = None
 
-
 class ArgoProfilePoint(BaseModel):
     pressure_dbar: float | None = None
     depth_meters: float | None = None
     temperature_c: float | None = None
     salinity_psu: float | None = None
-
 
 class ArgoProfile(BaseModel):
     platform_wmo: int
@@ -285,14 +228,12 @@ class ArgoProfile(BaseModel):
     longitude: float | None = None
     points: list[ArgoProfilePoint]
 
-
 class ArgoFloatDetail(BaseModel):
     platform_wmo: int
     profiles_available: int
     time_range: TimeRange | None = None
     spatial_bounds: SpatialBounds | None = None
     recent_profiles: list[ArgoProfile] = Field(default_factory=list)
-
 
 class TextParseResult(BaseModel):
     file: str
@@ -302,10 +243,28 @@ class TextParseResult(BaseModel):
     coordinate_columns: dict[str, str] = Field(default_factory=dict)
     sample_records: list[dict[str, str | None]] = Field(default_factory=list)
 
-
-# --- Glider -----------------------------------------------------------------
-
-
 class GliderNotConfigured(BaseModel):
     detail: str
     status: str = "not_configured"
+
+class GliderMissionSummary(BaseModel):
+    mission_id: str
+    latitude: float | None = None
+    longitude: float | None = None
+    last_time: str | None = None
+    profiles: int = 0
+    source: str | None = None
+
+class GliderProfilePoint(BaseModel):
+    time: str | None = None
+    latitude: float | None = None
+    longitude: float | None = None
+    depth_meters: float | None = None
+    temperature_c: float | None = None
+    salinity_psu: float | None = None
+    chlorophyll: float | None = None
+
+class GliderMission(BaseModel):
+    mission_id: str
+    source: str
+    points: list[GliderProfilePoint]
