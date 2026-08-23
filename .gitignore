@@ -28,6 +28,10 @@ data/**/*.cdf
 data/argo_cache/*
 data/glider_cache/*
 !data/**/.gitkeep
+# Tiny synthetic demo dataset ships WITH the repo so fresh clones/deployments
+# work out of the box (~80 KB). The real ~280 MB INCOIS product is fetched via
+# scripts/fetch_incois_vam.py — see README "Real Data".
+!data/sample_netcdf/synthetic_ocean.nc
 
 # OS / editor
 .DS_Store

@@ -154,10 +154,28 @@ The flagship dataset is the **actual INCOIS product**, registered automatically 
 Utility scripts:
 
 ```bash
-uv run python scripts/download_sample_data.py    # labelled SYNTHETIC sample dataset
+uv run python scripts/fetch_incois_vam.py         # real ~280 MB INCOIS VAM product (one-time, before offline deploys)
 uv run python scripts/download_argo.py --box 50 100 -10 30 --start 2023-01-01 \
     # ↑ cache real Argo float profiles (one <WMO>.nc each) for offline demos
 ```
+
+### Data & assets shipped in-repo (deploy-ready)
+
+Everything needed to run a fresh clone is committed — no manual downloads
+required for a working demo:
+
+| Asset | Purpose |
+|---|---|
+| `data/datasets/datasets.json` | Dataset registry (7 INCOIS products) loaded at backend startup |
+| `data/*_iso19115.xml` | ISO 19115 metadata records backing `/model/{id}/metadata` |
+| `data/sample_netcdf/synthetic_ocean.nc` | Tiny (~80 KB) labelled synthetic dataset — registered as `local_synthetic_ocean`, works out of the box |
+| `frontend/public/assets/waternormals.jpg` | three.js water-normal texture for the 3D ocean surface |
+| `frontend/fetch-assets.ps1` | Re-downloads the water texture if it ever goes missing |
+
+The only file **not** in git is the ~280 MB `incois_argo_mnt_VAM` NetCDF
+(GitHub hard-limits files at 100 MB). Fetch it once with
+`scripts/fetch_incois_vam.py`; without it the app falls back to the
+synthetic dataset and/or live ERDDAP access.
 
 ---
 
