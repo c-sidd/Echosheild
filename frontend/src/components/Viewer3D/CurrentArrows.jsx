@@ -46,8 +46,8 @@ function Particles({ field, verticalExaggeration }) {
     const velocities = new Float32Array(count * 2)
 
     for (let k = 0; k < count; k += 1) {
-      const cell = validCells[(k * validCells.length) % count] ?? validCells[k % validCells.length]
-      const [i, j, ui, vi] = cell
+      const cellIndex = Math.min(validCells.length - 1, Math.floor((k * validCells.length) / count))
+      const [i, j, ui, vi] = validCells[cellIndex]
       positions[k * 3] = mapping.lonToX(longitude[j])
       positions[k * 3 + 1] = depthToY(Number.isFinite(field.depth_meters) ? field.depth_meters : 0, verticalExaggeration)
       positions[k * 3 + 2] = mapping.latToZ(latitude[i])
