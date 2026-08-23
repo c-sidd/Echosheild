@@ -12,15 +12,26 @@ services:
       DEBUG: ${DEBUG:-false}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173,http://localhost:3000}
-      # Service-name based communication inside the compose network:
-      THREDDS_BASE_URL: http://thredds:8080/thredds
-      THREDDS_CATALOG_URL: http://thredds:8080/thredds/catalog.xml
-      OPENDAP_BASE_URL: http://thredds:8080/thredds
-      WMS_BASE_URL: http://thredds:8080/thredds
+      # Service URLs advertised to the browser must use the HOST-mapped port
+      # (localhost:8080) — the internal "thredds" hostname is unresolvable
+      # outside the compose network, which would break the services panel
+      # and WMS tile overlays. Local NetCDF files are read from the mounted
+      # volume directly, so server-side access never depends on these.
+      THREDDS_BASE_URL: http://localhost:8080/thredds
+      THREDDS_CATALOG_URL: http://localhost:8080/thredds/catalog.xml
+      OPENDAP_BASE_URL: http://localhost:8080/thredds
+      WMS_BASE_URL: http://localhost:8080/thredds
       WCS_BASE_URL: ${WCS_BASE_URL:-}
       INCOIS_ERDDAP_URL: ${INCOIS_ERDDAP_URL:-https://erddap.incois.gov.in/erddap}
+      # Prefer local profile files in /data/argo_cache when present;
+      # otherwise fetch live from INCOIS ERDDAP. Override to force.
+      ARGO_PROVIDER: ${ARGO_PROVIDER:-auto}
       ARGO_SOURCE: ${ARGO_SOURCE:-erddap}
       ARGO_DATASET: ${ARGO_DATASET:-phy}
+      ARGO_API_TIMEOUT: ${ARGO_API_TIMEOUT:-180}
+      # Empty -> argopy built-in server defaults (Ifremer).
+      ARGO_ERDDAP_URL: ${ARGO_ERDDAP_URL:-}
+      ARGO_GDAC_URL: ${ARGO_GDAC_URL:-}
       GLIDER_DATA_URL: ${GLIDER_DATA_URL:-}
       DATA_ROOT: /data
       NETCDF_DATA_ROOT: /data/sample_netcdf

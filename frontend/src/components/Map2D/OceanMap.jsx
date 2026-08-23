@@ -4,7 +4,7 @@ import { BitmapLayer, ScatterplotLayer } from '@deck.gl/layers'
 import { TileLayer } from '@deck.gl/geo-layers'
 import { HeatmapLayer } from '@deck.gl/aggregation-layers'
 import { useOceanStore } from '@/store/oceanStore'
-import { useSlice, useArgoFloats } from '@/hooks/useOceanData'
+import { useSlice, useArgoFloats, useServices } from '@/hooks/useOceanData'
 import { COLORMAPS } from '@/utils/colorUtils'
 import HoverInspector from '@/components/UI/HoverInspector'
 
@@ -23,6 +23,44 @@ function colormapToColorRange(colormap) {
   return stops.map(([r, g, b]) => [r, g, b])
 }
 
+// Strip GetCapabilities suffix and extract the dataset path THREDDS/ERDDAP
+// expect inside LAYERS (e.g. /thredds/wms/sample/x.nc -> "sample/x.nc",
+// /erddap/wms/incois_argo_mnt_VAM/request -> "incois_argo_mnt_VAM").
+function wmsDatasetPath(base) {
+  try {
+    const path = new URL(base).pathname
+    const idx = path.indexOf('/wms/')
+    if (idx < 0) return ''
+    return path
+      .slice(idx + 5)
+      .replace(/\/request\/?$/, '')
+      .replace(/\/$/, '')
+  } catch {
+    return ''
+  }
+}
+
+function buildWmsGetMapUrl(base, bounds, layer, time) {
+  const [west, south] = bounds[0]
+  const [east, north] = bounds[1]
+  const params = new URLSearchParams({
+    SERVICE: 'WMS',
+    VERSION: '1.3.0',
+    REQUEST: 'GetMap',
+    LAYERS: layer,
+    STYLES: '',
+    CRS: 'EPSG:4326',
+    // WMS 1.3.0 axis order for EPSG:4326 is lat,lon.
+    BBOX: `${south},${west},${north},${east}`,
+    WIDTH: '256',
+    HEIGHT: '256',
+    FORMAT: 'image/png',
+    TRANSPARENT: 'true',
+  })
+  if (time) params.set('TIME', time)
+  return `${base}?${params.toString()}`
+}
+
 export default function OceanMap() {
   const datasetId = useOceanStore((s) => s.activeDatasetId)
   const variable = useOceanStore((s) => s.activeVariable)
@@ -36,6 +74,29 @@ export default function OceanMap() {
 
   const sliceQuery = useSlice(datasetId, variable, timeIndex, depth, null)
   const argoQuery = useArgoFloats()
+  const servicesQuery = useServices(datasetId)
+
+  const showWms = useOceanStore((s) => s.showWms)
+  const timestampsList = useOceanStore((s) => s.timestampsList)
+  const currentTimeISO = timestampsList[timeIndex] ?? null
+
+  // WMS overlay only when the toggle is on AND an upstream WMS is advertised.
+  const wmsBase =
+    showWms && typeof servicesQuery.data?.wms === 'string'
+      ? servicesQuery.data.wms.replace(/\?.*/, '')
+      : null
+  // LAYERS naming differs per upstream: ERDDAP wants "<datasetID>#<var>",
+  // while a THREDDS per-dataset capabilities doc names layers by the bare
+  // variable (verified against thredds-docker 5.6 GetCapabilities).
+  const wmsLayerName = (() => {
+    if (!wmsBase) return null
+    const varName = sliceQuery.data?.variable ?? variable
+    if (/erddap/i.test(wmsBase)) {
+      const dsPath = wmsDatasetPath(wmsBase)
+      return dsPath ? `${dsPath}#${varName}` : null
+    }
+    return varName
+  })()
 
   const heatPoints = useMemo(() => {
     const slice = sliceQuery.data
@@ -94,6 +155,37 @@ export default function OceanMap() {
       },
       visible: true,
     }),
+    // WMS GetMap overlay — getTileData short-circuits the tile fetch; the
+    // actual image is loaded per-tile by BitmapLayer from the GetMap URL.
+    wmsBase &&
+      wmsLayerName &&
+      new TileLayer({
+        id: 'wms-overlay',
+        data: wmsBase,
+        getTileData: async () => true,
+        minZoom: 0,
+        maxZoom: 12,
+        tileSize: 256,
+        renderSubLayers: (props) => {
+          const { boundingBox } = props.tile
+          return new BitmapLayer(props, {
+            data: undefined,
+            image: buildWmsGetMapUrl(
+              wmsBase,
+              boundingBox,
+              wmsLayerName,
+              currentTimeISO,
+            ),
+            bounds: [
+              boundingBox[0][0],
+              boundingBox[0][1],
+              boundingBox[1][0],
+              boundingBox[1][1],
+            ],
+            opacity: 0.65,
+          })
+        },
+      }),
     heatPoints.length > 0 &&
       new HeatmapLayer({
         id: 'slice-heat',

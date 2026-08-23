@@ -9,6 +9,7 @@ import TimeControls from '@/components/Controls/TimeControls'
 import ProfileChart from '@/components/ProfileChart/ProfileChart'
 import HoverInspector from '@/components/UI/HoverInspector'
 import MetadataPanel from '@/components/UI/MetadataPanel'
+import ServicesPanel from '@/components/UI/ServicesPanel'
 import ColorbandLegend from '@/components/UI/ColorbandLegend'
 import UpstreamBanner from '@/components/UI/UpstreamBanner'
 import LoadingOverlay from '@/components/UI/LoadingOverlay'
@@ -49,6 +50,7 @@ export default function Dashboard() {
       <TimeControls />
       <ProfileChart />
       <MetadataPanel />
+      <ServicesPanel />
       <ColorbandLegend />
       <GliderPlaceholder />
       <HoverInspector />

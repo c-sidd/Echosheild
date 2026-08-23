@@ -1,6 +1,6 @@
 import { Eye, EyeOff } from 'lucide-react'
 import { useOceanStore } from '@/store/oceanStore'
-import { useCurrents, useGliderStatus } from '@/hooks/useOceanData'
+import { useCurrents, useGliderStatus, useServices } from '@/hooks/useOceanData'
 
 function Toggle({ label, checked, onChange, badge, disabled }) {
   return (
@@ -33,18 +33,25 @@ export default function LayerControls() {
   const toggleShowVolume = useOceanStore((s) => s.toggleShowVolume)
   const showArgoFloats = useOceanStore((s) => s.showArgoFloats)
   const toggleShowArgoFloats = useOceanStore((s) => s.toggleShowArgoFloats)
+  const showCurrents = useOceanStore((s) => s.showCurrents)
+  const toggleShowCurrents = useOceanStore((s) => s.toggleShowCurrents)
   const showGlider = useOceanStore((s) => s.showGlider)
   const toggleShowGlider = useOceanStore((s) => s.toggleShowGlider)
+  const showWms = useOceanStore((s) => s.showWms)
+  const toggleShowWms = useOceanStore((s) => s.toggleShowWms)
 
   const datasetId = useOceanStore((s) => s.activeDatasetId)
   const timeIndex = useOceanStore((s) => s.timeIndex)
   const depth = useOceanStore((s) => s.activeDepth)
 
-  const currentsQuery = useCurrents(datasetId, timeIndex, depth, null)
+  // Null datasetId while hidden keeps the query disabled (no request spam).
+  const currentsQuery = useCurrents(showCurrents ? datasetId : null, timeIndex, depth, null)
   const gliderQuery = useGliderStatus()
+  const servicesQuery = useServices(datasetId)
 
   const currentsAvailable = currentsQuery.data?.available === true
   const gliderConfigured = gliderQuery.data?.configured === true
+  const wmsAvailable = !!servicesQuery.data?.wms
 
   return (
     <div className="space-y-0.5">
@@ -60,16 +67,23 @@ export default function LayerControls() {
       />
       <Toggle
         label="Currents"
-        checked={false}
-        onChange={() => {}}
+        checked={showCurrents && currentsAvailable}
+        onChange={toggleShowCurrents}
         badge={currentsAvailable ? 'Live' : 'N/A'}
-        disabled
+        disabled={!currentsAvailable}
       />
       <Toggle
         label="Gliders"
         checked={showGlider && gliderConfigured}
         onChange={toggleShowGlider}
         badge={gliderConfigured ? undefined : 'Soon'}
+      />
+      <Toggle
+        label="WMS Overlay"
+        checked={showWms && wmsAvailable}
+        onChange={toggleShowWms}
+        badge={wmsAvailable ? 'Live' : 'N/A'}
+        disabled={!wmsAvailable}
       />
     </div>
   )

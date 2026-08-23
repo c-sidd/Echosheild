@@ -19,8 +19,8 @@
 
   <datasetScan
       name="EchoShield sample ocean data"
-      ID="echoshield/sample"
-      path="sample"
+      ID="echoshield/sample_netcdf"
+      path="sample_netcdf"
       location="/opt/data">
 
     <metadata inherited="true">

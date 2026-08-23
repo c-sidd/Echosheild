@@ -196,6 +196,16 @@ export function useCurrents(id, timeIndex, depth, bbox) {
   })
 }
 
+export function useServices(id) {
+  return useQuery({
+    queryKey: ['services', id],
+    queryFn: ({ signal }) => model.fetchServices(id, signal),
+    enabled: !!id,
+    staleTime: LONG,
+    retry: false,
+  })
+}
+
 export function useArgoFloats(bounds) {
   return useQuery({
     queryKey: ['argo-floats', bounds ?? null],

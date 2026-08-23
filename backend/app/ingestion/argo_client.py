@@ -42,11 +42,30 @@ def _create_fetcher(
     source: str,
     dataset: str,
     mode: str = "standard",
+    *,
+    api_timeout: int = 120,
+    erddap_url: str | None = None,
+    gdac_url: str | None = None,
     **options: Any,
 ) -> Any:
-    """Seam for tests: build an argopy DataFetcher."""
+    """Seam for tests: build an argopy DataFetcher.
+
+    Sets argopy global options before construction so that the timeout,
+    source server, and trust_env propagate to every internal fsspec/httpx
+    call argopy makes (it ignores per-request kwargs).
+    """
     import argopy
 
+    set_kwargs: dict[str, Any] = {
+        "api_timeout": api_timeout,
+        "trust_env": True,  # honour HTTP_PROXY / HTTPS_PROXY env vars if set
+    }
+    if erddap_url:
+        set_kwargs["erddap"] = erddap_url
+    if gdac_url:
+        set_kwargs["gdac"] = gdac_url
+
+    argopy.set_options(**set_kwargs)
     return argopy.DataFetcher(src=source, ds=dataset, mode=mode, **options)
 
 
@@ -78,7 +97,11 @@ class ArgoClient:
         try:
             fetcher = call_with_retry(
                 lambda: _create_fetcher(
-                    self._settings.ARGO_SOURCE, self._settings.ARGO_DATASET
+                    self._settings.ARGO_SOURCE,
+                    self._settings.ARGO_DATASET,
+                    api_timeout=self._settings.ARGO_API_TIMEOUT,
+                    erddap_url=self._settings.ARGO_ERDDAP_URL or None,
+                    gdac_url=self._settings.ARGO_GDAC_URL or None,
                 ).region(box)
             )
             frame = fetcher.to_dataframe()
@@ -111,11 +134,24 @@ class ArgoClient:
     ) -> list[ArgoFloatSummary]:
         """Search floats in a geographic box (optionally time-bounded)."""
         # argopy requires 6 elements (lon0 lon1 lat0 lat1 depth0 depth1),
-        # optionally +2 time bounds -> 8.
+        # optionally +2 time bounds -> 8. The GDAC source validates the time
+        # bounds as strings, so always hand argopy ISO strings — ERDDAP
+        # accepts both.
         box: list[Any] = [lon_min, lon_max, lat_min, lat_max, 0, 2000]
         if start:
-            end_value = pd.Timestamp(end) if end else pd.Timestamp.now("UTC").tz_localize(None)
-            box.extend([pd.Timestamp(start), end_value])
+            # Truncate both bounds to day precision so the cache key is stable
+            # for every call made on the same calendar day.  pd.Timestamp.now()
+            # with microsecond resolution produced a unique key on every request,
+            # meaning FileCache never hit and every /floats call cost ~105 s
+            # upstream.  Argo floats surface every ~10 days so daily resolution
+            # is more than sufficient.
+            start_day = pd.Timestamp(start).normalize().isoformat()
+            if end:
+                end_day = pd.Timestamp(end).normalize().isoformat()
+            else:
+                # Default end = today midnight UTC — stable within a calendar day.
+                end_day = pd.Timestamp.now("UTC").tz_localize(None).normalize().isoformat()
+            box.extend([start_day, end_day])
 
         cache_key = f"search:{box}:{max_floats}"
         payload = self._cache.get(cache_key)
@@ -190,7 +226,11 @@ class ArgoClient:
                 try:
                     fetcher = call_with_retry(
                         lambda: _create_fetcher(
-                            self._settings.ARGO_SOURCE, self._settings.ARGO_DATASET
+                            self._settings.ARGO_SOURCE,
+                            self._settings.ARGO_DATASET,
+                            api_timeout=self._settings.ARGO_API_TIMEOUT,
+                            erddap_url=self._settings.ARGO_ERDDAP_URL or None,
+                            gdac_url=self._settings.ARGO_GDAC_URL or None,
                         ).float(wmo)
                     )
                     data = fetcher.data

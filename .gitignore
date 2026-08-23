@@ -38,3 +38,13 @@ data/glider_cache/*
 Thumbs.db
 .idea/
 .vscode/
+
+# THREDDS container runtime artifacts (generated under thredds/content at startup)
+thredds/content/cache/
+thredds/content/logs/
+thredds/content/state/
+thredds/content/notebooks/
+thredds/content/templates/
+thredds/content/godiva3.properties
+thredds/content/wmsConfig.xml
+thredds/content/README.txt

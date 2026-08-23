@@ -72,6 +72,13 @@ class Settings(BaseSettings):
     # Provider selection: "auto" prefers real local files in ARGO_CACHE_DIR
     # when present, otherwise the remote argopy client is used.
     ARGO_PROVIDER: Literal["auto", "local", "remote"] = "auto"
+    # Timeout for argopy upstream HTTP requests (seconds).
+    # Ifremer ERDDAP bulk-region queries for the Indian Ocean can exceed
+    # argopy's default 60 s; 120 s is safe for production.
+    ARGO_API_TIMEOUT: int = 120
+    # Override the argopy ERDDAP / GDAC server (empty → argopy default).
+    ARGO_ERDDAP_URL: str = ""
+    ARGO_GDAC_URL: str = ""
 
     # --- Glider ingestion (future providers) --------------------------------
     GLIDER_DATA_URL: str | None = None

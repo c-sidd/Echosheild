@@ -27,6 +27,7 @@ export const useOceanStore = create((set, get) => ({
   showCurrents: true,
   showArgoFloats: true,
   showGlider: false,
+  showWms: false,
   verticalExaggeration: 50,
 
   colormap: 'viridis',
@@ -129,6 +130,7 @@ export const useOceanStore = create((set, get) => ({
   toggleShowCurrents: () => set((s) => ({ showCurrents: !s.showCurrents })),
   toggleShowArgoFloats: () => set((s) => ({ showArgoFloats: !s.showArgoFloats })),
   toggleShowGlider: () => set((s) => ({ showGlider: !s.showGlider })),
+  toggleShowWms: () => set((s) => ({ showWms: !s.showWms })),
   setVerticalExaggeration: (v) => set({ verticalExaggeration: v }),
 
   setColormap: (colormap) => set({ colormap }),

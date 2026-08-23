@@ -2,12 +2,24 @@
 
 from __future__ import annotations
 
+from datetime import date, timedelta
+
 from fastapi import APIRouter, Query, Request
 
 from app.ingestion.argo_client import ArgoClient, ArgoClientError
 from app.models.schemas import ArgoFloatDetail, ArgoFloatSummary, ArgoProfile
 
 router = APIRouter(prefix="/argo", tags=["argo"])
+
+# Floats surface every ~10 days; anything silent for months is not "active".
+# Bounding the default window keeps upstream bulk queries small enough to
+# finish well inside request timeouts (an unbounded Indian-Ocean region
+# download exceeds any sane HTTP budget).
+_ACTIVE_WINDOW_DAYS = 90
+
+
+def _default_start() -> str:
+    return (date.today() - timedelta(days=_ACTIVE_WINDOW_DAYS)).isoformat()
 
 
 class UpstreamUnavailable(RuntimeError):
@@ -25,8 +37,9 @@ def _client(request: Request) -> ArgoClient:
     summary="Search Argo floats",
     description=(
         "Search active floats in a geographic box (defaults to the Indian"
-        " Ocean). Requires a reachable Argo upstream (ERDDAP/GDAC); failures"
-        " return HTTP 503 with a clear error."
+        " Ocean). Without explicit start/end only floats reporting within"
+        " the last 90 days are returned, keeping upstream queries fast;"
+        " failures return HTTP 503 with a clear error."
     ),
     responses={503: {"description": "Argo upstream unavailable"}},
 )
@@ -44,6 +57,8 @@ def search_floats(
         raise ValueError("lon_min must be less than lon_max")
     if lat_min >= lat_max:
         raise ValueError("lat_min must be less than lat_max")
+    if start is None and end is None:
+        start = _default_start()
     try:
         return _client(request).search_floats(
             lon_min=lon_min,
@@ -119,7 +134,11 @@ def search_alias(
 ) -> list[ArgoFloatSummary]:
     try:
         return _client(request).search_floats(
-            lon_min=lon_min, lon_max=lon_max, lat_min=lat_min, lat_max=lat_max
+            lon_min=lon_min,
+            lon_max=lon_max,
+            lat_min=lat_min,
+            lat_max=lat_max,
+            start=_default_start(),
         )
     except ArgoClientError as exc:
         raise UpstreamUnavailable(str(exc)) from exc
