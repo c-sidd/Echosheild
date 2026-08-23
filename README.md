@@ -56,6 +56,8 @@ A web-based interactive 3D visualization platform that turns real ocean-model ou
 - 🗺️ **2-D map sync**: deck.gl heatmap + ArcGIS basemap + Argo float scatter, pickable hover inspection
 - 📈 **Profile charts**: Recharts temperature/salinity columns at any grid point (inverted depth axis)
 - 🔬 **Instrument overlay**: pulsing Argo float markers with drill-down profiles; honest glider placeholder
+- 🛰️ **Services panel**: per-dataset OPeNDAP / WMS / ERDDAP / THREDDS-catalog endpoints surfaced from `/model/{id}/services`
+- 🖼️ **WMS raster overlay**: one-click WMS tiles over the 2-D map (per-upstream `LAYERS` naming handled automatically)
 - 🛡️ **Error contracts the UI respects**: 404 permanent · 422 silent · 503 → retry banner with readiness recovery
 
 <!-- 📸 TODO before final submission: add screenshots/GIF here -->
@@ -96,7 +98,7 @@ A web-based interactive 3D visualization platform that turns real ocean-model ou
 | Source product | INCOIS ERDDAP — ARGO Monthly VAM gridded NetCDF (~280 MB, real) |
 | Scientific serving | THREDDS (OPeNDAP/WMS/fileServer URLs advertised, not proxied) |
 | Caching | FileCache TTL JSON (Argo searches/float details), LRU open-dataset pool |
-| Packaging | uv workspace, npm; docker-compose scaffold present |
+| Packaging | uv workspace, npm; docker-compose full stack (THREDDS + FastAPI) built & live-verified |
 
 ---
 
@@ -210,7 +212,7 @@ Base URL: `/api/v1` · Interactive docs: `http://localhost:8000/docs`
 ### Argo observations
 | Method | Path | Description |
 |---|---|---|
-| GET | `/argo/floats` | Float search in bbox (+optional time window); cached 1 h |
+| GET | `/argo/floats` | Float search in bbox (+optional time window; defaults to a rolling 90-day active-floats window so upstream queries stay fast); cached 1 h |
 | GET | `/argo/floats/{wmo}` | Float detail: availability, ranges, recent profiles |
 | GET | `/argo/floats/{wmo}/profile` | One profile (latest or by cycle) |
 
@@ -253,7 +255,22 @@ npm install
 npm run dev                   # http://localhost:5173  (proxies /api → :8000)
 ```
 
-### 3 · Verify the loop
+### 3 · Full stack with Docker (THREDDS + backend)
+
+```bash
+docker compose -f infra/docker-compose.yml up -d --build
+# THREDDS UI   → http://localhost:8080/thredds/catalog.html
+# FastAPI docs → http://localhost:8000/docs
+```
+
+The image ships public CA certificates (GlobalSign R3 root + OV 2018
+intermediate) so INCOIS ERDDAP's TLS chain verifies inside the container,
+advertises browser-reachable THREDDS URLs (`localhost:8080`), and queries
+Argo via ERDDAP within a bounded time window (`ARGO_SOURCE=erddap`,
+`ARGO_API_TIMEOUT=180`). The first `/argo/floats` call can take ~1–2 min
+upstream; results are cached for 1 h.
+
+### 4 · Verify the loop
 
 ```bash
 curl http://localhost:8000/api/v1/model/incois_argo_mnt_VAM/extent
@@ -328,6 +345,9 @@ All configuration flows through environment variables (or `backend/.env`) — se
 | `ARGO_CACHE_DIR` | `$DATA_ROOT/argo_cache` | Per-WMO Argo profile files (offline mode) |
 | `GLIDER_CACHE_DIR` | `$DATA_ROOT/glider_cache` | Reserved for future glider provider |
 | `ARGO_PROVIDER` | `auto` | `auto` / `local` / `remote` |
+| `ARGO_SOURCE` | `erddap` | argopy source: `erddap` (fast bulk queries) or `gdac` (slow per-float downloads) |
+| `ARGO_API_TIMEOUT` | `120` | Seconds budgeted for one remote Argo query (compose sets 180) |
+| `ARGO_ERDDAP_URL` / `ARGO_GDAC_URL` | unset | Override the argopy server endpoints |
 | `THREDDS_BASE_URL` | unset | Enables deterministic THREDDS service URLs |
 | `CORS_ORIGINS` | `localhost:5173,3000` | Comma-separated allow-list |
 | `CACHE_TTL_SECONDS` | `3600` | Argo FileCache TTL |
@@ -342,7 +362,7 @@ All configuration flows through environment variables (or `backend/.env`) — se
 - [ ] Glider provider plugin (seam + schema already in place)
 - [ ] BGC (oxygen/chlorophyll) variables when upstream product available
 - [ ] WebSocket push for long-running remote dataset opens
-- [ ] Docker compose hardening incl. THREDDS container smoke test
+- [x] Docker compose hardening incl. THREDDS container smoke test *(live-verified 2026-08-23: healthy THREDDS, WMS GetMap 200 PNG, 50 Argo floats)*
 
 ---
 

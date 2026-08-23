@@ -153,14 +153,25 @@ locally (no network); otherwise they fall through to argopy remote access.
 Local files keep pressure as pressure — `depth_meters` is only populated
 when the file itself provides depth.
 
+Remote access defaults to the Ifremer ERDDAP (`ARGO_SOURCE=erddap`) with
+`ARGO_API_TIMEOUT` seconds budgeted per query (`ARGO_ERDDAP_URL` /
+`ARGO_GDAC_URL` override the endpoints). `gdac` mode downloads per-float
+NetCDF files sequentially and needs much larger timeouts. When
+`/argo/floats` or `/argo/search` are called without explicit dates the route
+applies a rolling **90-day window** ending today so bulk region queries
+finish inside request timeouts (argopy itself stays unbounded when used
+programmatically — pinned by tests).
+
 ## Configuration
 
 All configuration flows through `app/core/config.py` (`pydantic-settings`) and
 `.env.example`. Key groups: application/CORS, THREDDS/OPeNDAP/WMS/WCS/ERDDAP
-URLs, Argo source/dataset, data roots and caches, request timeout, and
-response-size limits (`MAX_DATA_POINTS`, `MAX_PROFILE_POINTS`,
-`MAX_GRID_POINTS`). Inside docker compose, services communicate via names
-(`http://thredds:8080/thredds`), never localhost.
+URLs, Argo source/dataset/timeout/server-URLs, data roots and caches, request
+timeout, and response-size limits (`MAX_DATA_POINTS`, `MAX_PROFILE_POINTS`,
+`MAX_GRID_POINTS`). Under docker compose the *advertised* service URLs use the
+host-mapped port (`http://localhost:8080/thredds`) because the internal
+`thredds` hostname is unresolvable from a user's browser; server-side catalog
+discovery tolerates unreachable URLs by design.
 
 ## Reliability
 
@@ -175,7 +186,7 @@ response-size limits (`MAX_DATA_POINTS`, `MAX_PROFILE_POINTS`,
 
 ```bash
 cd backend
-uv run pytest            # 114 tests (real-data integration + offline units)
+uv run pytest            # 132 tests (real-data integration + offline units)
 uv run ruff check .
 uv run ruff format --check .
 uv run mypy app          # strict mode
@@ -197,6 +208,39 @@ product when present (auto-skipped if the file is absent).
 ---
 
 ## Development log
+
+### Session 2026-08-23 — full-stack deployment live (THREDDS + TLS + Argo)
+
+**Docker stack running end-to-end and verified against real upstreams**
+(all green: 132 tests, ruff, strict mypy):
+
+* Frontend shipped on top of the API: layer-toggle request gating,
+  ServicesPanel + `useServices` hook, deck.gl WMS overlay with per-upstream
+  `LAYERS` naming (THREDDS bare variable vs ERDDAP `dataset#var`).
+* Compose advertises host-reachable THREDDS URLs (`localhost:8080`) — the
+  internal `thredds:` name cannot resolve in a browser. Catalog
+  `datasetScan` path aligned with the backend's `sample_netcdf` layout so
+  catalog URLs match registry file paths.
+* TLS fix: INCOIS ERDDAP serves only its leaf certificate and chains to
+  GlobalSign R3, which modern CA bundles dropped. The image now installs
+  GlobalSign R3 root + OV 2018 intermediate (public certs, in
+  `docker_certs/`) into both the system store **and** the certifi bundle
+  (httpx/requests trust certifi, not the OS store).
+* argopy runtime: non-root user gets a home dir (`useradd --create-home`)
+  for its cache; GDAC fetchers require string datetimes — box time bounds
+  are passed as ISO strings.
+* Argo route defaults: `/argo/floats|search` apply a rolling 90-day window
+  when no dates are given. Unbounded region queries via GDAC never finish
+  (~50 sequential per-float downloads); bounded ERDDAP queries return in
+  ~30 s raw. Live call: HTTP 200 with 50 Indian-Ocean floats (~105 s first
+  hit).
+* Env additions: `ARGO_API_TIMEOUT`, `ARGO_ERDDAP_URL`, `ARGO_GDAC_URL`;
+  compose defaults `ARGO_SOURCE=erddap`.
+
+Known follow-up (deliberately deferred): the implicit `end = Timestamp.now()`
+in `argo_client._region_box` participates in the FileCache key at microsecond
+precision, so `/argo/floats` responses effectively never cache across
+requests. Truncating the implicit end to day precision would restore caching.
 
 ### Session 2026-08-22 — real-data integration & final validation
 

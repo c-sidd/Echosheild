@@ -254,9 +254,11 @@ upstream URLs come from the ISO 19115 record):
 
 Inside docker compose (`THREDDS_BASE_URL` set) the same dataset additionally
 exposes local `opendap`, `wms`, `thredds_catalog` and `http_download` URLs
-served from the mounted file. **WCS is advertised only when an explicit
-WCS-capable service is configured** (`WCS_BASE_URL`) — it is never silently
-inherited from other service bases.
+served from the mounted file. Advertised THREDDS URLs use the host-mapped
+port (`http://localhost:8080/thredds/...`) so they are reachable directly
+from a browser. **WCS is advertised only when an explicit WCS-capable service
+is configured** (`WCS_BASE_URL`) — it is never silently inherited from other
+service bases.
 
 ## 5. Argo observations (`/argo`)
 
@@ -269,6 +271,10 @@ exist, else remote). All upstream failures are controlled 503s.
 Params: `lon_min=50`, `lon_max=100`, `lat_min=-10`, `lat_max=30`
 (Indian Ocean defaults), optional `start`/`end` dates, `max_floats=50`
 (1–500). The region box always carries the standard 0–2000 m depth range.
+When `start`/`end` are omitted the route applies a rolling **90-day window**
+ending today — this keeps upstream bulk region queries (ERDDAP/GDAC) inside
+request timeouts; explicit dates bypass it. Results are cached for
+`CACHE_TTL_SECONDS` (1 h default).
 
 ```json
 [{"platform_wmo": 2902123, "cycles": 6, "last_location": [12.0, 70.0], "last_time": "2024-03-21T00:00:00"}]

@@ -64,7 +64,8 @@ identical to a direct xarray read of the same file.
 | Hover inspector | `GET /model/{id}/point?variables=temperature,salinity&latitude&longitude&time_index&depth`; keys are canonical names |
 | Argo markers | `GET /argo/floats` (defaults to Indian Ocean box) → drilldown `/argo/{wmo}` → `/argo/{wmo}/profile` |
 | Glider markers | check `GET /glider/status`; `configured:false` → render "coming soon" placeholder |
-| Heavy raster overlays | take URLs from `GET /model/{id}/services` (OPeNDAP/WMS/ERDDAP); backend never proxies these payloads |
+| Heavy raster overlays | take URLs from `GET /model/{id}/services` (OPeNDAP/WMS/ERDDAP); backend never proxies these payloads. **Implemented** in `OceanMap.jsx`: WMS `TileLayer` with per-upstream `LAYERS` — bare variable name for THREDDS, `datasetId#variable` for ERDDAP; `TIME` must match an available timestep |
+| Services panel | `GET /model/{id}/services` rendered as copyable links (`ServicesPanel.jsx`, polled via `useServices`) |
 
 ## 6. Performance envelope (measured, real 280 MB file)
 
@@ -90,10 +91,12 @@ Server caps: `MAX_GRID_POINTS` (auto-downsampling with reported strides),
 
 ## 8. Known limitations (honest)
 
-* THREDDS container runtime unverified here (registry pulls blocked by
-  environment egress); compose config validates, catalog serves OPeNDAP/WMS/
-  HTTPServer — no WCS configured anywhere.
-* Argo `/argo/*` currently needs Internet (remote argopy); drop NetCDF
-  profiles into `data/argo_cache/` to switch to the local provider
-  automatically (`ARGO_PROVIDER=auto`).
+* THREDDS container runtime **verified live 2026-08-23** (healthy container;
+  catalog and WMS GetMap return HTTP 200). Advertised service URLs are
+  host-reachable under compose (`localhost:8080`). No WCS configured
+  anywhere.
+* Argo `/argo/*` needs Internet (remote argopy, ERDDAP by default);
+  `/argo/floats` defaults to a rolling 90-day window when no dates are
+  given. Drop NetCDF profiles into `data/argo_cache/` to switch to the
+  local provider automatically (`ARGO_PROVIDER=auto`).
 * Glider ingestion awaits a real data source (client seam ready).

@@ -1,6 +1,15 @@
 # EchoShield — Hackathon Progress Report
 ### Problem Statement 26067 · INCOIS / MoES · Category: Software · Theme: Smart Automation
 
+> **UPDATE 2026-08-23** — the gaps below are closed. The frontend is fully
+> built (3-D volume viewer, 2-D deck.gl map, time/depth animation, profile
+> charts, Argo overlay, services panel, WMS raster overlay). The full docker
+> stack (THREDDS + FastAPI) is built and live-verified: healthy THREDDS
+> serving WMS tiles (HTTP 200), INCOIS ERDDAP TLS chain trusted inside the
+> container, `/argo/floats` returning 50 real Indian-Ocean floats. All gates
+> green: 132 backend tests, strict mypy, ruff, frontend lint + production
+> build. Percentages in this report reflect its original snapshot date.
+
 ---
 
 ## Overall Completion Estimate
