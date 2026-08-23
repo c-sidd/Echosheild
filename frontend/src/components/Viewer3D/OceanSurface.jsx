@@ -48,7 +48,9 @@ export default function OceanSurface() {
 
   const geometry = useMemo(() => new THREE.PlaneGeometry(400, 260, 64, 64), [])
 
-  const material = useMemo(() => {
+  // Water is a Mesh subclass (with an internal ShaderMaterial), not a plain
+  // material — mount it via <primitive>, never as `material={...}`.
+  const water = useMemo(() => {
     if (!normalsTexture) return null
     return new Water(geometry, {
       textureWidth: 512,
@@ -63,11 +65,20 @@ export default function OceanSurface() {
     })
   }, [normalsTexture, geometry])
 
-  useEffect(() => () => geometry.dispose(), [geometry])
+  useEffect(
+    () => () => {
+      geometry.dispose()
+      if (water) {
+        water.material.dispose()
+        water.getRenderTarget?.().dispose()
+      }
+    },
+    [geometry, water],
+  )
 
   useFrame((_state, delta) => {
-    if (material?.uniforms?.time != null) {
-      material.uniforms.time.value += delta * 0.4
+    if (water?.material?.uniforms?.time != null) {
+      water.material.uniforms.time.value += delta * 0.4
     }
     // Gentle breathing bob just above the shallowest slice.
     if (waterRef.current) {
@@ -76,15 +87,14 @@ export default function OceanSurface() {
     }
   })
 
-  return (
-    <mesh
-      ref={waterRef}
-      geometry={geometry}
-      material={material ?? undefined}
-      rotation={[-Math.PI / 2, 0, 0]}
-      position={[0, -0.4, 0]}
-    >
-      {!material && (
+  if (!water) {
+    return (
+      <mesh
+        ref={waterRef}
+        geometry={geometry}
+        rotation={[-Math.PI / 2, 0, 0]}
+        position={[0, -0.4, 0]}
+      >
         <meshStandardMaterial
           color="#04203a"
           metalness={0.65}
@@ -92,7 +102,9 @@ export default function OceanSurface() {
           transparent
           opacity={0.94}
         />
-      )}
-    </mesh>
-  )
+      </mesh>
+    )
+  }
+
+  return <primitive ref={waterRef} object={water} />
 }

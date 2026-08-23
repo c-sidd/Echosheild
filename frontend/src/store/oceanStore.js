@@ -175,10 +175,10 @@ function nearestDepth(depths, target) {
 }
 
 function clampTimeIndex() {
-  const s = get()
+  const s = useOceanStore.getState()
   const count = s.timeRange?.count
   if (Number.isFinite(count) && count > 0 && s.timeIndex > count - 1) {
-    set({ timeIndex: count - 1 })
+    useOceanStore.setState({ timeIndex: count - 1 })
   }
 }
 
