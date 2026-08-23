@@ -20,21 +20,12 @@ function SlicePlane({ slice, depth, isActive }) {
   const latCount = slice?.latitude?.length ?? 0
   const lonCount = slice?.longitude?.length ?? 0
   const hasData = latCount > 1 && lonCount > 1 && Array.isArray(slice?.values)
-
   const range = useMemo(() => {
     if (!hasData) return null
-    let min = Infinity
-    let max = -Infinity
-    for (const row of slice.values) {
-      for (const value of row ?? []) {
-        if (!Number.isFinite(value)) continue
-        min = Math.min(min, value)
-        max = Math.max(max, value)
-      }
-    }
+    let min = Infinity; let max = -Infinity
+    for (const row of slice.values) for (const value of row ?? []) if (Number.isFinite(value)) { min = Math.min(min, value); max = Math.max(max, value) }
     return Number.isFinite(min) ? { min, max } : null
   }, [slice, hasData])
-
   const autoMin = colorMin ?? range?.min ?? 0
   const autoMax = colorMax ?? range?.max ?? 1
   const lut = useMemo(() => buildLUT(colormap, autoMin, autoMax, logScale), [colormap, autoMin, autoMax, logScale])
@@ -43,31 +34,24 @@ function SlicePlane({ slice, depth, isActive }) {
     let alive = true
     setPixels(null)
     if (!hasData || !range) return undefined
-    void valuesToTextureAsync(slice.values, lut, autoMin, autoMax, lonCount, latCount, Math.round(opacity * 255))
-      .then((result) => { if (alive) setPixels(result) })
-      .catch(() => { if (alive) setPixels(null) })
+    void valuesToTextureAsync(slice.values, lut, autoMin, autoMax, lonCount, latCount, Math.round(opacity * 255)).then((result) => { if (alive) setPixels(result) }).catch(() => { if (alive) setPixels(null) })
     return () => { alive = false }
   }, [slice, lut, autoMin, autoMax, opacity, hasData, lonCount, latCount, range])
 
   const texture = useMemo(() => {
     if (!pixels || !lonCount || !latCount) return null
     const next = new THREE.DataTexture(pixels, lonCount, latCount, THREE.RGBAFormat)
-    next.magFilter = THREE.LinearFilter
-    next.minFilter = THREE.LinearFilter
-    next.needsUpdate = true
+    next.magFilter = THREE.LinearFilter; next.minFilter = THREE.LinearFilter; next.needsUpdate = true
     return next
   }, [pixels, lonCount, latCount])
-
   useEffect(() => () => texture?.dispose(), [texture])
 
   const targetOpacity = (isActive ? Math.min(1, opacity + 0.12) : opacity * 0.82) * (range ? 1 : 0)
   useFrame((_state, delta) => {
-    const material = materialRef.current
-    if (!material) return
+    if (!materialRef.current) return
     fadeRef.current = THREE.MathUtils.damp(fadeRef.current, targetOpacity, 6, delta)
-    material.opacity = fadeRef.current
+    materialRef.current.opacity = fadeRef.current
   })
-
   if (!texture) return null
   const y = depthToY(depth, verticalExaggeration)
 
@@ -95,24 +79,10 @@ export default function VolumeRenderer() {
   const showVolume = useOceanStore((s) => s.showVolume)
   const stack = useSliceStack(datasetId, variable, timeIndex, activeDepth)
   const dataReady = Array.isArray(stack.data) && stack.data.length > 0
-
-  useEffect(() => {
-    if (dataReady && showVolume) useOceanStore.getState().setDataLoadedAt(Date.now())
-  }, [dataReady, showVolume])
-
+  useEffect(() => { if (dataReady && showVolume) useOceanStore.getState().setDataLoadedAt(Date.now()) }, [dataReady, showVolume])
   if (!showVolume || stack.isLoading || !dataReady) return null
-  const slices = stack.data.filter((slice) => slice && Number.isFinite(slice.depth_meters) && Array.isArray(slice.values))
+  const slices = stack.data.filter((slice) => slice && (Number.isFinite(slice.depth_meters) || slice.depth_meters == null) && Array.isArray(slice.values))
   if (!slices.length) return null
-
-  const nearestDepth = slices.reduce((best, slice) =>
-    Math.abs(slice.depth_meters - activeDepth) < Math.abs(best.depth_meters - activeDepth) ? slice : best,
-  slices[0])
-
-  return (
-    <group>
-      {slices.map((slice) => (
-        <SlicePlane key={`${datasetId}-${variable}-${timeIndex}-${slice.depth_meters}`} slice={slice} depth={slice.depth_meters} isActive={slice === nearestDepth} />
-      ))}
-    </group>
-  )
+  const nearestDepth = slices.reduce((best, slice) => Math.abs((slice.depth_meters ?? 0) - activeDepth) < Math.abs((best.depth_meters ?? 0) - activeDepth) ? slice : best, slices[0])
+  return <group>{slices.map((slice) => <SlicePlane key={`${datasetId}-${variable}-${timeIndex}-${slice.depth_meters ?? 'surface'}`} slice={slice} depth={slice.depth_meters ?? 0} isActive={slice === nearestDepth} />)}</group>
 }
