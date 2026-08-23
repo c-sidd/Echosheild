@@ -25,13 +25,8 @@ function FloatMarker({ floatData, lonToX, latToZ }) {
           setSelectedFloat(floatData)
         }}
       >
-        <sphereGeometry args={[isSelected ? 1.15 : 0.72, 12, 12]} />
-        <meshStandardMaterial
-          color="#00303f"
-          emissive="#00ffff"
-          emissiveIntensity={isSelected ? 3 : 1.5}
-          toneMapped={false}
-        />
+        <sphereGeometry args={[isSelected ? 1.15 : 0.72, 10, 10]} />
+        <meshBasicMaterial color={isSelected ? '#00ffff' : '#007b91'} toneMapped={false} />
       </mesh>
       {isSelected && <PulseRing />}
     </group>
@@ -57,11 +52,12 @@ function PulseRing() {
 
 export default function InstrumentMarkers() {
   const show = useOceanStore((s) => s.showArgoFloats)
-  const bounds = useOceanStore(
+  const bounds = useOceanStore((s) => s.bbox)
+  const datasetBounds = useOceanStore(
     (s) => s.datasets.find((d) => d.id === s.activeDatasetId)?.spatial_bounds,
   )
-  const floatsQuery = useArgoFloats()
-  const mapping = useMemo(() => makeDomainMapping(bounds), [bounds])
+  const floatsQuery = useArgoFloats(bounds, show)
+  const mapping = useMemo(() => makeDomainMapping(datasetBounds), [datasetBounds])
   const floats = useMemo(() => {
     const data = floatsQuery.data
     return Array.isArray(data) ? data.slice(0, MAX_FLOATS) : []
@@ -72,7 +68,7 @@ export default function InstrumentMarkers() {
   return (
     <group>
       {floats.map((f, i) => (
-        <PopIn key={f.platform_wmo} delay={Math.min(i * 25, 1200)}>
+        <PopIn key={f.platform_wmo} delay={Math.min(i * 20, 800)}>
           <FloatMarker floatData={f} lonToX={mapping.lonToX} latToZ={mapping.latToZ} />
         </PopIn>
       ))}
