@@ -64,7 +64,10 @@ def build_thredds_service_urls(
     base = settings.THREDDS_BASE_URL.rstrip("/") if settings.THREDDS_BASE_URL else None
     opendap_base = settings.OPENDAP_BASE_URL.rstrip("/") if settings.OPENDAP_BASE_URL else base
     wms_base = settings.WMS_BASE_URL.rstrip("/") if settings.WMS_BASE_URL else base
-    wcs_base = settings.WCS_BASE_URL.rstrip("/") if settings.WCS_BASE_URL else base
+    # WCS is only advertised when an explicit WCS-capable service is
+    # configured — never silently inherited from the THREDDS base URL,
+    # because the catalog may not enable a WCS service at all.
+    wcs_base = settings.WCS_BASE_URL.rstrip("/") if settings.WCS_BASE_URL else None
     catalog = settings.THREDDS_CATALOG_URL or None
 
     path = dataset_path.strip("/")

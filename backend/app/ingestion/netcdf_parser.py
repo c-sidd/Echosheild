@@ -510,8 +510,11 @@ def read_point(
             if first_da is None:
                 depth_used = float(verticals[vertical_idx])
         raw = float(np.asarray(da.values).ravel()[0])
-        values[variable] = _finite_or_none(raw)
-        units[variable] = _safe_str(ds[variable].attrs.get("units"))
+        # Point values are keyed by the stable canonical category when one
+        # exists (frontend contract), falling back to the source name.
+        key = _canonical_of(ds, variable) or variable
+        values[key] = _finite_or_none(raw)
+        units[key] = _safe_str(ds[variable].attrs.get("units"))
         if first_da is None:
             first_da = da
 

@@ -133,25 +133,54 @@
       "title": "INCOIS ARGO Monthly data Variational Analysis Methodology",
       "provider": "INCOIS",
       "description": "INCOIS ARGO Monthly data Variational Analysis Methodology",
-      "source_type": "erddap_remote",
-      "format": "ISO-19115 metadata",
-      "local_path": null,
+      "source_type": "local",
+      "format": "NetCDF",
+      "local_path": "data/sample_netcdf/incois_argo_mnt_VAM_f99c_fe7d_a5a3_U1787403117643.nc",
       "metadata_path": "data/incois_argo_mnt_VAM_iso19115.xml",
       "enabled": true,
       "license": "The data may be used and redistributed for free but is not intended\nfor legal use, since it may contain inaccuracies. Neither the data\nContributor, ERD, NOAA, nor the United States Government, nor any\nof their employees or contractors, makes any warranty, express or\nimplied, including warranties of merchantability and fitness for a\nparticular purpose, or assumes any legal liability for the accuracy,\ncompleteness, or usefulness, of this information.",
       "services": {
         "dataset_id": "incois_argo_mnt_VAM",
-        "opendap": "https://erddap.incois.gov.in/erddap/griddap/incois_argo_mnt_VAM",
         "erddap_griddap": "https://erddap.incois.gov.in/erddap/griddap/incois_argo_mnt_VAM",
-        "wms": "https://erddap.incois.gov.in/erddap/wms/incois_argo_mnt_VAM/request?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetCapabilities"
+        "wms": "https://erddap.incois.gov.in/erddap/wms/incois_argo_mnt_VAM/request?SERVICE=WMS&REQUEST=GetCapabilities"
       },
       "accessible": true,
-      "remote_only": true,
-      "note": "Registered from ISO 19115 metadata; the gridded NetCDF file is not stored locally and is accessed remotely when the upstream is reachable.",
+      "dimensions": {
+        "time": 271,
+        "ZAX": 24,
+        "latitude": 60,
+        "longitude": 90
+      },
+      "variables": {
+        "canonical_mapping": {
+          "temperature": "TEMP",
+          "salinity": "SAL"
+        },
+        "source_names": [
+          "TEMP",
+          "SAL"
+        ]
+      },
+      "coordinate_mapping": {
+        "time": "time",
+        "latitude": "latitude",
+        "longitude": "longitude",
+        "depth": "ZAX"
+      },
+      "vertical_kind": "depth",
+      "vertical_units": "METERS",
       "time_range": {
-        "start": "2004-01-15T00:00:00Z",
-        "end": "2026-07-15T00:00:00Z",
-        "count": 0
+        "start": "2004-01-15T00:00:00",
+        "end": "2026-07-15T00:00:00",
+        "count": 271
+      },
+      "depth_range": {
+        "min_meters": 5.0,
+        "max_meters": 2000.0,
+        "count": 24,
+        "positive_down": true,
+        "vertical_kind": "depth",
+        "vertical_units": "METERS"
       },
       "spatial_bounds": {
         "west": 30.5,

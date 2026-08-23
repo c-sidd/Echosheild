@@ -33,8 +33,21 @@ def test_build_thredds_service_urls(settings: Settings) -> None:
     urls = build_thredds_service_urls(dataset_path="incois/test.nc", settings=configured)
     assert urls.opendap == "http://thredds:8080/thredds/dodsC/incois/test.nc"
     assert urls.wms is not None and "GetCapabilities" in urls.wms
-    assert urls.wcs is not None and "/wcs/" in urls.wcs
+    # WCS is never silently inherited from the THREDDS base URL: the catalog
+    # may not enable a WCS service at all (false advertising guard).
+    assert urls.wcs is None
     assert urls.http_download == "http://thredds:8080/thredds/fileServer/incois/test.nc"
+
+
+def test_wcs_only_when_explicitly_configured(settings: Settings) -> None:
+    configured = settings.model_copy(
+        update={
+            "THREDDS_BASE_URL": "http://thredds:8080/thredds",
+            "WCS_BASE_URL": "http://wcs.example.gov/wcs",
+        }
+    )
+    urls = build_thredds_service_urls(dataset_path="a.nc", settings=configured)
+    assert urls.wcs is not None and urls.wcs.startswith("http://wcs.example.gov/wcs")
 
 
 def test_supported_services_are_respected(settings: Settings) -> None:

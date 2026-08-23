@@ -9,17 +9,17 @@ and in-situ observations. Current completion vs its requirements:
 
 | Requirement | Status | Notes |
 | --- | --- | --- |
-| 3D volumetric rendering (slices/isosurfaces/animation) | backend-ready, no UI | `slice`, `times`, `currents` APIs live; WebGL layer not started (`frontend/` is empty scaffolding) |
+| 3D volumetric rendering (slices/isosurfaces/animation) | backend-ready, no UI | `slice`, `times`, `currents` APIs live **and value-verified against the real INCOIS NetCDF product**; WebGL layer not started (`frontend/` is empty scaffolding) |
 | Instrument overlay (Argo/Glider/CTD/BGC) | partial | Argo complete (remote + local-cache provider, profile drill-down); glider pluggable stub; CTD/BGC not started |
-| Multi-format ingestion (NetCDF + text, modular) | done | xarray/pydap, CSV/TSV, ISO 19115 auto-discovery, canonical variable-mapping layer |
+| Multi-format ingestion (NetCDF + text, modular) | done | xarray/pydap, CSV/TSV, ISO 19115 auto-discovery, canonical variable-mapping layer; **real 280 MB INCOIS ARGO Monthly VAM product registered & verified** |
 | Colorbar/variable/opacity/exaggeration controls | backend-ready, no UI | units, ranges, `max_speed_ms`, downsampling strides exposed for the UI |
-| Scalable web architecture (REST/OPeNDAP, deployable) | done* | FastAPI + THREDDS client + docker compose; *containers not yet exercised end-to-end (network/daemon limits) |
+| Scalable web architecture (REST/OPeNDAP, deployable) | done* | FastAPI + THREDDS client + docker compose (config validated); *THREDDS container runtime not exercised here (registry pulls blocked by environment egress) |
 | Extensible plugin design | partial | `GliderClient` seam, `ARGO_PROVIDER` factory, canonical layer; needs a second concrete plugin |
-| Open standards (CF, WMS/WCS) | partial | CF coordinate/variable resolution implemented; WMS advertised from metadata (unverified live); no WCS |
+| Open standards (CF, WMS/WCS) | partial | CF coordinate/variable resolution implemented; WMS advertised from metadata (unverified live — upstream unreachable from this machine); WCS never falsely advertised |
 
-Overall ≈ 40%: backend/data layer ~85% (tested, live-verified),
-presentation layer 0%. Next milestone: frontend bootstrap + first
-slice-rendering loop against `local_synthetic_ocean`.
+Overall ≈ 55%: backend/data layer ~95% (tested, live-verified against real
+data), presentation layer 0%. Next milestone: frontend bootstrap +
+first slice-rendering loop against `incois_argo_mnt_VAM`.
 
 ## Architecture
 
@@ -103,7 +103,13 @@ file or URL access. Sources discovered at startup:
 
 1. Local NetCDF under `NETCDF_DATA_ROOT`, `ARGO_CACHE_DIR` and
    `GLIDER_CACHE_DIR` (IDs prefixed `local_`; cache-dir collisions get
-   deterministic `local_<dirname>_<stem>` IDs)
+   deterministic `local_<dirname>_<stem>` IDs). When an ISO 19115 sidecar
+   record matches a file — exact stem, or ERDDAP-style download names with
+   hash suffixes (`incois_argo_mnt_VAM_<hash>.nc` ↔
+   `incois_argo_mnt_VAM_iso19115.xml`) — the ISO product identifier becomes
+   the stable dataset ID and the record enriches title/provider/license/
+   bounds/services. **The real 280 MB INCOIS ARGO Monthly VAM product is
+   registered this way as `incois_argo_mnt_VAM`.**
 2. ISO 19115 metadata records (`*iso19115*.xml`) under `DATA_ROOT`
    — the included INCOIS ERDDAP records register real products such as
    `incois_argo_sst_weekly` with griddap/OPeNDAP + WMS endpoints, and
@@ -169,14 +175,16 @@ response-size limits (`MAX_DATA_POINTS`, `MAX_PROFILE_POINTS`,
 
 ```bash
 cd backend
-uv run pytest            # 95 tests (external services mocked)
+uv run pytest            # 114 tests (real-data integration + offline units)
 uv run ruff check .
 uv run ruff format --check .
 uv run mypy app          # strict mode
 uv sync                  # dependency resolution from uv.lock
 ```
 
-Tests run fully offline: synthetic NetCDF fixtures, mocked argopy/httpx.
+Tests run fully offline: synthetic NetCDF fixtures, mocked argopy/httpx, plus
+`tests/test_real_data_integration.py` which value-verifies the real INCOIS
+product when present (auto-skipped if the file is absent).
 
 ## Known limitations
 
@@ -189,6 +197,49 @@ Tests run fully offline: synthetic NetCDF fixtures, mocked argopy/httpx.
 ---
 
 ## Development log
+
+### Session 2026-08-22 — real-data integration & final validation
+
+**Real dataset integrated and live-verified** (all green: 114 tests, ruff,
+format, strict mypy):
+
+* Inventoried `data/`: real INCOIS ARGO Monthly VAM gridded product
+  (280 MB NetCDF: TEMP/SAL on time=271 × ZAX=24 × lat=60 × lon=90,
+  30.5–119.5 °E / 29.5 °S–29.5 °N, depth 5–2000 m in METERS, 2004‑01‑15 →
+  2026‑07‑15) + 6 ISO 19115 records. No glider data; `argo_cache` empty.
+* Registry: deterministic ISO-derived dataset IDs with sidecar prefix
+  matching for ERDDAP-style download names; THREDDS local-copy service URLs
+  merged with upstream ERDDAP endpoints; corrupt-file isolation kept.
+* **WCS honesty fix**: `build_thredds_service_urls` no longer inherits WCS
+  from the THREDDS base — advertised only when `WCS_BASE_URL` is explicitly
+  configured (catalog defines OPeNDAP/WMS/HTTPServer only).
+* Canonical variable resolution in `ModelDataService`: `/slice`, `/profile`,
+  `/point` accept canonical names (`temperature`) *and* raw source names
+  (`TEMP`). `/point` values now keyed by canonical category.
+* Manifest regenerated (`data/datasets/datasets.json`, 7 datasets; real
+  product is `local`, never `remote_only`).
+* Live verification vs direct xarray truth: temperature/salinity slices
+  element-wise identical (bbox orientation `values[lat][lon]` confirmed),
+  profile column and point samples match to float32 precision; currents
+  honestly unavailable; error contracts verified (404 unknown
+  dataset/variable/index, 422 inverted bbox/negative index, controlled 503
+  when Argo upstream unreachable, path-traversal IDs rejected).
+* Performance on the real file (warm): metadata 5 ms, full-grid slice 7 ms
+  (~76 KB), bbox slice 4 ms, profile/point 4 ms — fully lazy access.
+* New `tests/test_real_data_integration.py` (16 tests, auto-skip when the
+  real file is absent).
+* Docs refreshed: `docs/api-contract.md`, new
+  `docs/frontend-handoff.md`, this README.
+
+**Verified:** everything above against the real file via live uvicorn run.
+
+**NOT VERIFIED (environment egress blocks them):**
+
+1. THREDDS container runtime — Docker daemon started but image pulls fail
+   (registry CDN EOF). `docker compose config --quiet` passes; retry the
+   stack on a working network.
+2. Live INCOIS ERDDAP / IFREMER reachability — both blocked from this
+   machine right now; upstream service URLs come from ISO metadata.
 
 ### Session 2026-08-21/22 — full backend implementation
 

@@ -28,8 +28,12 @@
       <authority>echoshield</authority>
       <dataType>Grid</dataType>
       <documentation type="summary">
-        Synthetic sample / small test NetCDF files mounted into the THREDDS
-        container. NOT real INCOIS operational data.
+        NetCDF files mounted into the THREDDS container from
+        data/sample_netcdf. This currently includes the real INCOIS ARGO
+        Monthly (Variational Analysis Methodology) gridded product
+        incois_argo_mnt_VAM_*.nc as well as the synthetic_ocean.nc test
+        fixture. Served through OPeNDAP, WMS and HTTP download only —
+        no WCS service is defined for this catalog.
       </documentation>
     </metadata>
 

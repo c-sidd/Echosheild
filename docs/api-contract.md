@@ -1,8 +1,12 @@
 # EchoShield Backend API Contract
 
 Contract for frontend integration with the EchoShield FastAPI backend.
-Every example below was captured from a **live verified** server run
-(`uvicorn app.main:app`, dataset `local_synthetic_ocean`).
+Every example below was captured from a **live verified** server run.
+Primary verification dataset: the **real** INCOIS ARGO Monthly VAM gridded
+product (`incois_argo_mnt_VAM`, 271 monthly steps 2004‑01‑15 → 2026‑07‑15,
+60×90 grid, 30.5–119.5 °E / 29.5 °S–29.5 °N, depth axis 5–2000 m,
+variables `TEMP`→`temperature`, `SAL`→`salinity`). The synthetic fixture
+(`local_synthetic_ocean`) remains as a deterministic test dataset.
 
 Interactive schema: `/docs` (Swagger UI), `/redoc`, `/openapi.json`.
 
@@ -74,19 +78,26 @@ supply them.
 ```json
 [
   {
-    "id": "local_synthetic_ocean",
-    "title": "Synthetic Ocean",
-    "summary": "Local sample NetCDF file (synthetic_ocean.nc).",
+    "id": "incois_argo_mnt_VAM",
+    "title": "INCOIS ARGO Monthly data Variational Analysis Methodology",
+    "summary": "INCOIS ARGO Monthly data Variational Analysis Methodology",
     "source_type": "local",
-    "time_range": {"start": "2024-01-01T00:00:00", "end": "2024-01-08T00:00:00", "count": 8},
-    "spatial_bounds": {"west": 60.0, "east": 70.0, "south": 5.0, "north": 10.0},
-    "services": null,
-    "provider": null,
-    "license": null,
+    "time_range": {"start": "2004-01-15T00:00:00", "end": "2026-07-15T00:00:00", "count": 271},
+    "spatial_bounds": {"west": 30.5, "east": 119.5, "south": -29.5, "north": 29.5},
+    "services": {"dataset_id": "incois_argo_mnt_VAM", "erddap_griddap": "https://erddap.incois.gov.in/erddap/griddap/incois_argo_mnt_VAM", "...": "..."},
+    "provider": "INCOIS",
+    "license": "<use limitation text from the ISO record>",
+    "metadata_path": "incois_argo_mnt_VAM_iso19115.xml",
     "enabled": true
   }
 ]
 ```
+
+Dataset IDs are **deterministic**: when a sidecar ISO 19115 record matches a
+local file (exact stem, or ERDDAP-style download names with hash suffixes —
+`incois_argo_mnt_VAM_<hash>.nc` ↔ `incois_argo_mnt_VAM_iso19115.xml`), the ISO
+product identifier becomes the stable ID; otherwise files register as
+`local_<stem>`.
 
 ### `GET /model/{dataset_id}/metadata` → `DatasetMetadata`
 Dimensions dict, variable list (`name`, `canonical_name`, `long_name`,
@@ -94,7 +105,16 @@ Dimensions dict, variable list (`name`, `canonical_name`, `long_name`,
 attributes, time/depth ranges, spatial bounds, service endpoints when
 available, plus `coordinate_mapping` — the resolved coordinate variables,
 e.g. `{"time": "TAXIS", "latitude": "YAXIS", "longitude": "XAXIS",
-"pressure": "ZAX"}` for INCOIS-style files.
+"pressure": "ZAX"}` for INCOIS-style files. Live example (real VAM product):
+
+```json
+{
+  "coordinate_mapping": {"time": "time", "latitude": "latitude", "longitude": "longitude", "depth": "ZAX"},
+  "depth_range": {"min_meters": 5.0, "max_meters": 2000.0, "count": 24,
+                   "positive_down": true, "vertical_kind": "depth", "vertical_units": "METERS"},
+  "spatial_bounds": {"west": 30.5, "east": 119.5, "south": -29.5, "north": 29.5}
+}
+```
 
 ### `GET /model/{dataset_id}/variables` → `VariableMetadata[]`
 Each variable carries `canonical_name` — the EchoShield canonical category
@@ -106,7 +126,10 @@ Each variable carries `canonical_name` — the EchoShield canonical category
 ### `GET /model/{dataset_id}/depths` → `float[]`
 Vertical axis values in **native units** — meters for `vertical_kind:"depth"`,
 dbar for `"pressure"` (no conversion applied). Interpret via
-`metadata.coordinate_mapping` / slice responses, e.g. `[0.0, 10.0, 20.0]`.
+`metadata.coordinate_mapping` / slice responses. Real VAM product:
+`[5.0, 10.0, 20.0, 30.0, 50.0, 75.0, 100.0, 125.0, 150.0, 200.0, 250.0,
+300.0, 400.0, 500.0, 600.0, 700.0, 800.0, 900.0, 1000.0, 1200.0, 1400.0,
+1600.0, 1800.0, 2000.0]`.
 
 ### `GET /model/{dataset_id}/slice` → `ModelSlice`
 One horizontal 2-D field — the primary feed for 2-D rendering / volume slicing.
@@ -120,21 +143,25 @@ One horizontal 2-D field — the primary feed for 2-D rendering / volume slicing
 
 ```json
 {
-  "dataset_id": "local_synthetic_ocean",
-  "variable": "temperature",
+  "dataset_id": "incois_argo_mnt_VAM",
+  "variable": "TEMP",
   "canonical_name": "temperature",
-  "units": "degC",
-  "time_index": 0,
-  "time": "2024-01-01T00:00:00",
-  "depth_meters": 0.0,
+  "units": "degs",
+  "time_index": 100,
+  "time": "2012-05-15T00:00:00",
+  "depth_meters": 5.0,
   "vertical_kind": "depth",
-  "vertical_units": "m",
-  "latitude": [5.0, 6.0],
-  "longitude": [60.0, 61.0],
-  "values": [[27.1, 27.2], [26.9, null]],
+  "vertical_units": "METERS",
+  "latitude": [10.5, 11.5, "..."],
+  "longitude": [60.5, 61.5, "..."],
+  "values": [[29.51, 29.50, "..."], ["...", "..."]],
   "downsampling": {}
 }
 ```
+
+The `variable` parameter accepts **either the canonical category
+(`temperature`, `salinity`, …) or the raw source name (`TEMP`, `SAL`)** —
+canonical resolution is applied server-side.
 
 **Grid orientation:** `values[i][j]` is row `latitude[i]`, column
 `longitude[j]`. Grids larger than `MAX_GRID_POINTS` (100 000) are
@@ -161,14 +188,19 @@ variable categories when a mapping exists, else source names.
 
 ```json
 {
-  "dataset_id": "local_synthetic_ocean",
-  "latitude": 8.0, "longitude": 65.0,
-  "time": "2024-01-02T00:00:00", "depth_meters": 20.0,
-  "nearest_grid": {"latitude": 8.0, "longitude": 65.0},
-  "values": {"temperature": 22.5, "salinity": 35.1},
-  "units": {"temperature": "degC", "salinity": "1e-3"}
+  "dataset_id": "incois_argo_mnt_VAM",
+  "latitude": 15.5, "longitude": 70.5,
+  "time": "2008-03-15T00:00:00", "depth_meters": 75.0,
+  "vertical_kind": "depth", "vertical_units": "METERS",
+  "nearest_grid": {"latitude": 15.5, "longitude": 70.5},
+  "values": {"temperature": 24.865334, "salinity": 36.109665},
+  "units": {"temperature": "degs", "salinity": "PSU"}
 }
 ```
+
+`values`/`units` keys are the **canonical categories** when a mapping exists
+(stable across datasets), falling back to source names otherwise.
+`variables` accepts canonical or raw names, comma-separated.
 
 ### `GET /model/{dataset_id}/currents` → `CurrentVectorField | CurrentsUnavailable`
 Horizontal u/v vector field for flow overlays. Params: `time_index`,
@@ -179,7 +211,7 @@ without currents return **200** with an explicit unavailability contract —
 never fabricated data:
 
 ```json
-{"dataset_id": "local_temp_only", "available": false, "reason": "no current velocity pair detected in dataset variables"}
+{"dataset_id": "incois_argo_mnt_VAM", "available": false, "reason": "Current vector variables are not available in this dataset."}
 ```
 
 When available, the response adds `max_speed_ms` for color-scale
@@ -201,9 +233,30 @@ component.
 ### `GET /model/{dataset_id}/services` → `ServiceEndpoints`
 Direct scientific-service URLs (`opendap`, `erddap_griddap`,
 `erddap_tabledap`, `wms`, `wcs`, `thredds_catalog`, `http_download`; absent
-capabilities are omitted/null). The backend does **not** proxy WMS/WCS/OPeNDAP
+capabilities are `null`). The backend does **not** proxy WMS/WCS/OPeNDAP
 payloads — the frontend should hand these URLs directly to map/tile layers.
-503 for local files that expose no external service.
+
+Live-verified example (real INCOIS product, dev mode without THREDDS —
+upstream URLs come from the ISO 19115 record):
+
+```json
+{
+  "dataset_id": "incois_argo_mnt_VAM",
+  "opendap": null,
+  "erddap_griddap": "https://erddap.incois.gov.in/erddap/griddap/incois_argo_mnt_VAM",
+  "erddap_tabledap": null,
+  "wms": "https://erddap.incois.gov.in/erddap/wms/incois_argo_mnt_VAM/request?SERVICE=WMS&REQUEST=GetCapabilities",
+  "wcs": null,
+  "thredds_catalog": null,
+  "http_download": null
+}
+```
+
+Inside docker compose (`THREDDS_BASE_URL` set) the same dataset additionally
+exposes local `opendap`, `wms`, `thredds_catalog` and `http_download` URLs
+served from the mounted file. **WCS is advertised only when an explicit
+WCS-capable service is configured** (`WCS_BASE_URL`) — it is never silently
+inherited from other service bases.
 
 ## 5. Argo observations (`/argo`)
 

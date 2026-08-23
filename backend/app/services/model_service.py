@@ -5,13 +5,13 @@ from __future__ import annotations
 import logging
 import threading
 from collections import OrderedDict
-from typing import Any
+from typing import Any, cast
 
 import xarray as xr
 
 from app.core.config import Settings
 from app.ingestion import netcdf_parser as ncp
-from app.ingestion.variable_mapping import classify_dataset_variables
+from app.ingestion.variable_mapping import CanonicalVariable, classify_dataset_variables
 from app.models.schemas import (
     CurrentsUnavailable,
     CurrentVectorField,
@@ -130,6 +130,23 @@ class ModelDataService:
 
     # -- data extraction -----------------------------------------------------
 
+    def _resolve_variable(self, ds: xr.Dataset, variable: str) -> str:
+        """Accept either the source variable name or its canonical alias.
+
+        The frontend contract is built on stable canonical names
+        (``temperature``, ``salinity``, ...); raw source names such as
+        ``TEMP``/``SAL`` keep working for backwards compatibility.
+        """
+        if variable in ds.data_vars:
+            return variable
+        canonical = classify_dataset_variables(ds)
+        resolved = canonical.get(cast(CanonicalVariable, variable))
+        if resolved is not None:
+            return resolved
+        raise KeyError(
+            f"unknown variable {variable!r}; available: {sorted(map(str, ds.data_vars))[:20]}"
+        )
+
     def read_slice(
         self,
         dataset_id: str,
@@ -142,7 +159,7 @@ class ModelDataService:
         ds = self._open(self._registry.get(dataset_id))
         slice_ = ncp.read_slice(
             ds,
-            variable,
+            self._resolve_variable(ds, variable),
             time_index=time_index,
             depth_meters=depth_meters,
             bbox=bbox,
@@ -169,7 +186,7 @@ class ModelDataService:
         ds = self._open(self._registry.get(dataset_id))
         profile = ncp.read_profile(
             ds,
-            variable,
+            self._resolve_variable(ds, variable),
             latitude=latitude,
             longitude=longitude,
             time_index=time_index,
@@ -191,7 +208,7 @@ class ModelDataService:
         ds = self._open(self._registry.get(dataset_id))
         sample = ncp.read_point(
             ds,
-            variables,
+            [self._resolve_variable(ds, v) for v in variables],
             latitude=latitude,
             longitude=longitude,
             time_index=time_index,

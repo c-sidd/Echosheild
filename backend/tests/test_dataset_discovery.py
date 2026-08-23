@@ -56,10 +56,59 @@ def test_sidecar_metadata_association(settings, sample_netcdf_file: Path) -> Non
 
     registry = DatasetRegistry(settings)
     registry.discover()
-    info = registry.get("local_synthetic_ocean").info
+    info = registry.get("synthetic_ocean").info
     assert info.title == "Enriched Synthetic Title"
     assert info.provider == "TEST-PROVIDER"
     assert info.metadata_path == "synthetic_ocean_iso19115.xml"
+    # The sidecar product ID replaces the file-stem based ID.
+    ids = {entry.id for entry in registry.list()}
+    assert "local_synthetic_ocean" not in ids
+
+
+def test_sidecar_prefix_match_erddap_style_names(settings, sample_netcdf_file: Path) -> None:
+    """ERDDAP download names (hash suffixes) still match their ISO record."""
+    _write_minimal_iso_xml(
+        settings.DATA_ROOT / "incois_argo_mnt_VAM_iso19115.xml",
+        stem="incois_argo_mnt_VAM",
+        title="INCOIS ARGO Monthly VAM",
+        provider="INCOIS",
+    )
+    erddap_name = settings.NETCDF_DATA_ROOT / (
+        "incois_argo_mnt_VAM_f99c_fe7d_a5a3_U1787403117643.nc"
+    )
+    erddap_name.write_bytes(sample_netcdf_file.read_bytes())
+
+    registry = DatasetRegistry(settings)
+    registry.discover()
+
+    info = registry.get("incois_argo_mnt_VAM").info
+    assert info.title == "INCOIS ARGO Monthly VAM"
+    assert info.provider == "INCOIS"
+    # The plain-stem synthetic copy keeps its own unrelated registration.
+    assert "local_synthetic_ocean" in {entry.id for entry in registry.list()}
+
+
+def test_sidecar_most_specific_match_wins(settings, sample_netcdf_file: Path) -> None:
+    """When two records prefix-match, the longer (more specific) one wins."""
+    _write_minimal_iso_xml(
+        settings.DATA_ROOT / "incois_argo_iso19115.xml",
+        stem="incois_argo",
+        title="Generic Argo Record",
+        provider="GENERIC",
+    )
+    _write_minimal_iso_xml(
+        settings.DATA_ROOT / "incois_argo_mnt_VAM_iso19115.xml",
+        stem="incois_argo_mnt_VAM",
+        title="Specific Monthly VAM Record",
+        provider="INCOIS",
+    )
+    target = settings.NETCDF_DATA_ROOT / "incois_argo_mnt_VAM_deadbeef.nc"
+    target.write_bytes(sample_netcdf_file.read_bytes())
+
+    registry = DatasetRegistry(settings)
+    registry.discover()
+    info = registry.get("incois_argo_mnt_VAM").info
+    assert info.title == "Specific Monthly VAM Record"
 
 
 def test_deterministic_ids_across_cache_dirs(

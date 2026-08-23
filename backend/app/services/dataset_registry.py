@@ -21,8 +21,12 @@ from app.ingestion.iso19115_parser import (
     parse_iso19115_file,
     scan_metadata_directory,
 )
-from app.ingestion.thredds_client import ThreddsClient, build_erddap_griddap_urls
-from app.models.schemas import DatasetInfo, TimeRange
+from app.ingestion.thredds_client import (
+    ThreddsClient,
+    build_erddap_griddap_urls,
+    build_thredds_service_urls,
+)
+from app.models.schemas import DatasetInfo, ServiceEndpoints, TimeRange
 
 _LOG = logging.getLogger("echoshield.registry")
 
@@ -71,19 +75,98 @@ class DatasetRegistry:
         return [root for root in roots if root.is_dir()]
 
     def _sidecar_record(self, nc_file: Path) -> IsoDatasetRecord | None:
-        """Associate ``<stem>_iso19115.xml`` metadata with a NetCDF file."""
+        """Associate ``<stem>_iso19115.xml`` metadata with a NetCDF file.
+
+        Matching is metadata-driven and tolerant of real-world export names:
+
+        1. exact stem match wins (``synthetic_ocean.nc`` ↔
+           ``synthetic_ocean_iso19115.xml``),
+        2. otherwise a word-boundary *prefix* match associates ERDDAP-style
+           download names with their product record — e.g.
+           ``incois_argo_mnt_VAM_f99c_fe7d_a5a3_U1787403117643.nc`` ↔
+           ``incois_argo_mnt_VAM_iso19115.xml``,
+
+        with the most specific (longest) record winning on ambiguity.
+        """
         stem = nc_file.stem.lower()
         search_dirs = {nc_file.parent, self._settings.metadata_root}
+        best: tuple[int, int, IsoDatasetRecord] | None = None  # (exact, length)
+        seen_xml: set[Path] = set()
         for directory in search_dirs:
             if not directory.is_dir():
                 continue
             for xml_path in sorted(directory.glob("*iso19115*.xml")):
-                xml_stem = xml_path.name.lower().replace("_iso19115.xml", "")
-                if xml_stem == stem or xml_path.stem.lower() == stem:
-                    record = parse_iso19115_file(xml_path)
-                    if record is not None:
-                        return record
-        return None
+                if xml_path.resolve() in seen_xml:
+                    continue
+                seen_xml.add(xml_path.resolve())
+                lowered = xml_path.name.lower()
+                xml_stem = (
+                    lowered[: -len("_iso19115.xml")]
+                    if lowered.endswith("_iso19115.xml")
+                    else xml_path.stem.lower()
+                )
+                exact = xml_stem == stem or xml_path.stem.lower() == stem
+                prefix = not exact and xml_stem and stem.startswith(xml_stem + "_")
+                if not (exact or prefix):
+                    continue
+                specificity = (1 if exact else 0, len(xml_stem))
+                if best is not None and specificity <= best[:2]:
+                    continue
+                record = parse_iso19115_file(xml_path)
+                if record is not None:
+                    best = (specificity[0], specificity[1], record)
+        return best[2] if best else None
+
+    def _services_for(
+        self,
+        sidecar: IsoDatasetRecord | None,
+        nc_file: Path,
+        dataset_id: str,
+    ) -> ServiceEndpoints | None:
+        """Combine upstream-product services (ISO) with THREDDS local-copy URLs.
+
+        When THREDDS is configured the local copy is served deterministically
+        through ``dodsC``/``wms``/``fileServer``; upstream ERDDAP endpoints from
+        the ISO record are kept alongside. WCS is never invented here.
+        """
+        thredds_urls: ServiceEndpoints | None = None
+        if self._settings.THREDDS_BASE_URL:
+            try:
+                thredds_urls = build_thredds_service_urls(
+                    dataset_path=f"{nc_file.parent.name}/{nc_file.name}",
+                    settings=self._settings,
+                    supported={"opendap", "httpserver", "wms"},
+                )
+            except ValueError:  # malformed configured URL — never break discovery
+                thredds_urls = None
+
+        upstream: ServiceEndpoints | None = None
+        if sidecar is not None:
+            candidate = sidecar.services.model_copy(update={"dataset_id": dataset_id})
+            remote_fields = (
+                "opendap",
+                "erddap_griddap",
+                "erddap_tabledap",
+                "wms",
+                "wcs",
+            )
+            if any(getattr(candidate, field) for field in remote_fields):
+                upstream = candidate
+
+        if thredds_urls is None:
+            return upstream
+        if upstream is None:
+            return thredds_urls
+        return ServiceEndpoints(
+            dataset_id=dataset_id,
+            opendap=thredds_urls.opendap or upstream.opendap,
+            wms=thredds_urls.wms or upstream.wms,
+            erddap_griddap=upstream.erddap_griddap,
+            erddap_tabledap=upstream.erddap_tabledap,
+            wcs=upstream.wcs,
+            thredds_catalog=thredds_urls.thredds_catalog,
+            http_download=thredds_urls.http_download,
+        )
 
     def _probe_readable(self, nc_file: Path) -> bool:
         """Cheap header check so corrupt files never break discovery."""
@@ -104,15 +187,26 @@ class DatasetRegistry:
             for nc_file in sorted(root.glob("*.nc")):
                 if not self._probe_readable(nc_file):
                     continue
-                dataset_id = f"local_{nc_file.stem}"
+                sidecar = self._sidecar_record(nc_file)
+                # Deterministic ID: the ISO 19115 product identifier when a
+                # sidecar record matches (stable across ERDDAP re-downloads,
+                # whose filenames embed session hashes), otherwise the file
+                # stem based local_* ID.
+                dataset_id = sidecar.dataset_id if sidecar else f"local_{nc_file.stem}"
                 if dataset_id in seen_ids:
                     # Deterministic de-confliction across cache directories.
+                    dataset_id = f"local_{nc_file.stem}"
+                if dataset_id in seen_ids:
                     dataset_id = f"local_{root.name}_{nc_file.stem}"
                 if dataset_id in seen_ids:
                     continue
                 seen_ids.add(dataset_id)
 
-                sidecar = self._sidecar_record(nc_file)
+                time_range = (
+                    TimeRange(start=sidecar.time_start, end=sidecar.time_end, count=0)
+                    if sidecar and sidecar.time_start and sidecar.time_end
+                    else None
+                )
                 info = DatasetInfo(
                     id=dataset_id,
                     title=(sidecar.title if sidecar else nc_file.stem.replace("_", " ").title()),
@@ -125,6 +219,9 @@ class DatasetRegistry:
                     provider=sidecar.provider if sidecar else None,
                     license=sidecar.use_limitation if sidecar else None,
                     metadata_path=sidecar.source_file if sidecar else None,
+                    time_range=time_range,
+                    spatial_bounds=sidecar.spatial_bounds if sidecar else None,
+                    services=self._services_for(sidecar, nc_file, dataset_id),
                 )
                 self._register(RegisteredDataset(info=info, local_path=nc_file))
                 count += 1
