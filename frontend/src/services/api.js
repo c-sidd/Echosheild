@@ -1,3 +1,5 @@
+import { useOceanStore } from '@/store/oceanStore'
+
 const BASE = import.meta.env.VITE_API_BASE_URL ?? '/api/v1'
 
 export class ApiError extends Error {
@@ -12,21 +14,35 @@ export class ApiError extends Error {
 }
 
 async function request(path, options = {}) {
+  const { signal, noStore = false, ...rest } = options
   let res
   try {
-    res = await fetch(`${BASE}${path}`, options)
+    res = await fetch(`${BASE}${path}`, {
+      ...rest,
+      signal,
+      headers: {
+        Accept: 'application/json',
+        ...(noStore ? { 'Cache-Control': 'no-store' } : {}),
+        ...rest.headers,
+      },
+    })
   } catch (err) {
+    if (err?.name === 'AbortError') throw err
     throw new ApiError(0, 'Network error — backend unreachable', String(err))
   }
 
   const body = await res.json().catch(() => null)
 
   if (!res.ok) {
+    if (res.status === 503) {
+      const store = useOceanStore.getState()
+      store.setUpstream503(true, body?.detail ?? 'Data source temporarily unavailable')
+    }
     throw new ApiError(res.status, body?.detail ?? body?.message, body)
   }
   return body
 }
 
-export const api = {
-  get: (path) => request(path),
+export function get(path, options = {}) {
+  return request(path, { method: 'GET', ...options })
 }

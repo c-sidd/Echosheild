@@ -1,16 +1,27 @@
 @import "tailwindcss";
 
 @theme {
-  --color-abyss-950: #02060e;
-  --color-abyss-900: #04101c;
-  --color-abyss-800: #081a2c;
-  --color-abyss-700: #0d2540;
-  --color-abyss-600: #133355;
-  --color-ocean-500: #1d6fa5;
-  --color-ocean-400: #2f95cf;
-  --color-ocean-300: #5fb8e8;
-  --color-foam-100: #dff3fd;
+  --color-abyss: #020b18;
+  --color-deep: #041728;
+  --color-surface: #062640;
+  --color-glow: #00d4ff;
+  --color-warm: #ff6b35;
+  --color-cold: #0066ff;
+  --color-salt: #4ecdc4;
+  --color-current: #ffe66d;
+
+  --color-text-primary: #e8f4f8;
+  --color-text-secondary: #7fb3c8;
+  --color-text-muted: #3a6a85;
+
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+}
+
+:root {
+  --glass-bg: rgba(4, 23, 40, 0.75);
+  --glass-border: rgba(0, 212, 255, 0.15);
+  --glass-blur: blur(20px);
 }
 
 html,
@@ -21,6 +32,71 @@ body,
 
 body {
   margin: 0;
-  background-color: var(--color-abyss-950);
-  color: var(--color-foam-100);
+  background-color: var(--color-abyss);
+  color: var(--color-text-primary);
+  font-family: var(--font-sans);
+  overflow: hidden;
+}
+
+@utility glass-panel {
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+  border-radius: 14px;
+}
+
+.text-glow {
+  text-shadow: 0 0 12px rgba(0, 212, 255, 0.55);
+}
+
+.dot-pulse {
+  animation: dotPulse 2s ease-in-out infinite;
+}
+
+@keyframes dotPulse {
+  0%, 100% { opacity: 1; box-shadow: 0 0 6px currentColor; }
+  50% { opacity: 0.45; box-shadow: 0 0 14px currentColor; }
+}
+
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  border-radius: 2px;
+  background: linear-gradient(to right, rgba(0, 212, 255, 0.55), rgba(0, 212, 255, 0.12));
+  outline: none;
+  cursor: pointer;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--color-glow);
+  box-shadow: 0 0 10px rgba(0, 212, 255, 0.8);
+  cursor: pointer;
+}
+
+input[type="range"]::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: none;
+  background: var(--color-glow);
+  box-shadow: 0 0 10px rgba(0, 212, 255, 0.8);
+  cursor: pointer;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 212, 255, 0.18);
+  border-radius: 4px;
 }
