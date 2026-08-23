@@ -4,10 +4,10 @@ import * as THREE from 'three'
 import { Water } from 'three-stdlib'
 
 function makeProceduralNormals() {
-  const size = 256
+  const size = 128
   const data = new Uint8Array(size * size * 4)
-  for (let y = 0; y < size; y++) {
-    for (let x = 0; x < size; x++) {
+  for (let y = 0; y < size; y += 1) {
+    for (let x = 0; x < size; x += 1) {
       const nx = Math.sin(x * 0.22) * 0.5 + Math.sin((x + y) * 0.11) * 0.5
       const ny = Math.cos(y * 0.19) * 0.5 + Math.cos((x - y) * 0.13) * 0.5
       const o = (y * size + x) * 4
@@ -26,6 +26,7 @@ function makeProceduralNormals() {
 export default function OceanSurface() {
   const [normalsTexture, setNormalsTexture] = useState(null)
   const waterRef = useRef(null)
+  const tick = useRef(0)
 
   useEffect(() => {
     let disposed = false
@@ -46,65 +47,47 @@ export default function OceanSurface() {
     }
   }, [])
 
-  const geometry = useMemo(() => new THREE.PlaneGeometry(400, 260, 64, 64), [])
-
-  // Water is a Mesh subclass (with an internal ShaderMaterial), not a plain
-  // material — mount it via <primitive>, never as `material={...}`.
+  const geometry = useMemo(() => new THREE.PlaneGeometry(400, 260, 32, 32), [])
   const water = useMemo(() => {
     if (!normalsTexture) return null
     return new Water(geometry, {
-      textureWidth: 512,
-      textureHeight: 512,
+      textureWidth: 256,
+      textureHeight: 256,
       waterNormals: normalsTexture,
       sunDirection: new THREE.Vector3(0.5, 1, 0.5),
       sunColor: 0x4dd9ff,
       waterColor: 0x001e4d,
-      distortionScale: 3.7,
-      alpha: 0.92,
+      distortionScale: 2.5,
+      alpha: 0.9,
       fog: false,
     })
   }, [normalsTexture, geometry])
 
-  useEffect(
-    () => () => {
-      geometry.dispose()
-      if (water) {
-        water.material.dispose()
-        water.getRenderTarget?.().dispose()
-      }
-    },
-    [geometry, water],
-  )
+  useEffect(() => () => {
+    geometry.dispose()
+    normalsTexture?.dispose()
+    if (water) {
+      water.material.dispose()
+      water.getRenderTarget?.().dispose()
+    }
+  }, [geometry, normalsTexture, water])
 
   useFrame((_state, delta) => {
-    if (water?.material?.uniforms?.time != null) {
-      water.material.uniforms.time.value += delta * 0.4
-    }
-    // Gentle breathing bob just above the shallowest slice.
-    if (waterRef.current) {
-      waterRef.current.position.y =
-        -0.4 + Math.sin(performance.now() * 0.0006) * 0.15
-    }
+    if (!water?.material?.uniforms?.time) return
+    tick.current += delta
+    // The water shader does not need a 60 Hz simulation update.
+    if (tick.current < 1 / 30) return
+    water.material.uniforms.time.value += tick.current * 0.4
+    tick.current = 0
   })
 
   if (!water) {
     return (
-      <mesh
-        ref={waterRef}
-        geometry={geometry}
-        rotation={[-Math.PI / 2, 0, 0]}
-        position={[0, -0.4, 0]}
-      >
-        <meshStandardMaterial
-          color="#04203a"
-          metalness={0.65}
-          roughness={0.25}
-          transparent
-          opacity={0.94}
-        />
+      <mesh geometry={geometry} rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.4, 0]}>
+        <meshStandardMaterial color="#04203a" metalness={0.65} roughness={0.25} transparent opacity={0.94} />
       </mesh>
     )
   }
 
-  return <primitive ref={waterRef} object={water} />
+  return <primitive ref={waterRef} object={water} position={[0, -0.4, 0]} />
 }
