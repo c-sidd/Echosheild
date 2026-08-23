@@ -35,8 +35,7 @@ export default function IsoSurface() {
     if (!(max > min)) return null
     const target = Number.isFinite(isoValue) ? isoValue : (min + max) / 2
     const mc = new MarchingCubes(RESOLUTION, new THREE.MeshBasicMaterial({ color: '#00d4ff', transparent: true, opacity: Math.min(0.9, opacity), side: THREE.DoubleSide, toneMapped: false }), false, false)
-    mc.isolation = 0
-    mc.reset()
+    mc.isolation = 0; mc.reset()
     const field = mc.field
     const sample = (x, y, z) => {
       const xi = Math.min(lonCount - 1, Math.round((x / (RESOLUTION - 1)) * (lonCount - 1)))
