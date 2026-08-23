@@ -41,7 +41,7 @@ export default function IsosurfaceRenderer() {
   const timeIndex = useOceanStore((s) => s.timeIndex)
   const activeDepth = useOceanStore((s) => s.activeDepth)
   const verticalExaggeration = useOceanStore((s) => s.verticalExaggeration)
-  const stack = useSliceStack(datasetId, variable, timeIndex, activeDepth)
+  const stack = useSliceStack(datasetId, variable, timeIndex, activeDepth, enabled)
   const volume = useMemo(() => sampleVolume(stack.data), [stack.data])
   const depthSpan = useMemo(() => {
     const depths = stack.data?.map((s) => s.depth_meters).filter(Number.isFinite) ?? []
