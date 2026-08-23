@@ -18,6 +18,7 @@ from app.core.config import Settings, get_settings
 from app.core.logging import add_request_logging_middleware, configure_logging
 from app.ingestion.argo_client import ArgoClientError, NullArgoClient, create_argo_client
 from app.ingestion.thredds_client import ThreddsClient, ThreddsClientError
+from app.services.curated_sources import register_curated_sources
 from app.services.dataset_registry import DatasetRegistry
 from app.services.glider import GliderService
 from app.services.model_service import DatasetNotAccessibleError, ModelDataService, UpstreamUnavailableError
@@ -30,7 +31,8 @@ async def _lifespan_for(app: FastAPI, settings: Settings) -> AsyncIterator[None]
     settings.ensure_directories()
     registry = DatasetRegistry(settings, thredds_client=app.state.thredds_client)
     discovered = registry.discover()
-    _LOG.info("startup datasets_registered=%d", discovered)
+    register_curated_sources(registry)
+    _LOG.info("startup datasets_registered=%d", len(registry.list()))
 
     app.state.settings = settings
     app.state.registry = registry
@@ -71,15 +73,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     app.state.thredds_client = ThreddsClient(resolved_settings)
 
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=resolved_settings.CORS_ORIGINS,
-        allow_credentials=False,
-        allow_methods=["GET", "POST"],
-        allow_headers=["*"],
-    )
-    # Scientific slices are repetitive numeric JSON. Compression materially
-    # reduces network transfer without changing the API contract.
+    app.add_middleware(CORSMiddleware, allow_origins=resolved_settings.CORS_ORIGINS, allow_credentials=False, allow_methods=["GET", "POST"], allow_headers=["*"])
     app.add_middleware(GZipMiddleware, minimum_size=1024, compresslevel=6)
     add_request_logging_middleware(app)
 
