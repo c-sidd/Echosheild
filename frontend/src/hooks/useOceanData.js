@@ -52,15 +52,7 @@ export async function fetchSliceStack(queryClient, id, variable, timeIndex, acti
   const renderDepths = selectRenderDepths(depths, activeDepth)
   const results = []
   for (let offset = 0; offset < renderDepths.length; offset += 10) {
-    const chunk = renderDepths.slice(offset, offset + 10).map((depth) => ({
-      variable,
-      time_index: timeIndex,
-      depth_meters: depth,
-      west: bbox?.west,
-      east: bbox?.east,
-      south: bbox?.south,
-      north: bbox?.north,
-    }))
+    const chunk = renderDepths.slice(offset, offset + 10).map((depth) => ({ variable, time_index: timeIndex, depth_meters: depth, west: bbox?.west, east: bbox?.east, south: bbox?.south, north: bbox?.north }))
     const batch = await model.fetchSliceBatch(id, chunk, signal)
     results.push(...(Array.isArray(batch) ? batch : []))
   }
@@ -72,13 +64,7 @@ export function useSliceStack(id, variable, timeIndex, activeDepth = null, enabl
   const depths = useOceanStore((s) => s.depths)
   const bbox = useOceanStore((s) => s.bbox)
   const renderDepths = selectRenderDepths(depths, activeDepth)
-  return useQuery({
-    queryKey: sliceStackKey(id, variable, timeIndex, renderDepths, bbox),
-    queryFn: ({ signal }) => fetchSliceStack(queryClient, id, variable, timeIndex, activeDepth, bbox, signal),
-    enabled: enabled && !!id && !!variable,
-    staleTime: SLICE_STALE,
-    placeholderData: (prev) => prev,
-  })
+  return useQuery({ queryKey: sliceStackKey(id, variable, timeIndex, renderDepths, bbox), queryFn: ({ signal }) => fetchSliceStack(queryClient, id, variable, timeIndex, activeDepth, bbox, signal), enabled: enabled && !!id && !!variable, staleTime: SLICE_STALE, placeholderData: (prev) => prev })
 }
 
 export function prefetchSliceStack(queryClient, id, variable, timeIndex, activeDepth = null) {
@@ -96,7 +82,7 @@ export function useProfile(id, variable, lat, lon, timeIndex) { return useQuery(
 export function usePoint(id, variables, lat, lon, timeIndex, depth, enabled = true) { return useQuery({ queryKey: ['point', id, variables, lat, lon, timeIndex, depth], queryFn: ({ signal }) => model.fetchPoint(id, variables, lat, lon, timeIndex, depth, signal), enabled: enabled && !!id && Array.isArray(variables) && variables.length > 0 && Number.isFinite(lat) && Number.isFinite(lon), staleTime: SLICE_STALE }) }
 export function useCurrents(id, timeIndex, depth, bbox) { return useQuery({ queryKey: ['currents', id, timeIndex, depth, bbox], queryFn: ({ signal }) => model.fetchCurrents(id, timeIndex, depth, bbox, signal), enabled: !!id, staleTime: SLICE_STALE }) }
 export function useServices(id) { return useQuery({ queryKey: ['services', id], queryFn: ({ signal }) => model.fetchServices(id, signal), enabled: !!id, staleTime: LONG, retry: false }) }
-export function useArgoFloats(bounds) { return useQuery({ queryKey: ['argo-floats', bounds ?? null], queryFn: ({ signal }) => argo.fetchArgoFloats(bounds, undefined, signal), staleTime: MIN, refetchInterval: MIN, retry: (count, err) => !(err?.permanent ?? false) && count < 2 }) }
+export function useArgoFloats(bounds, enabled = true) { return useQuery({ queryKey: ['argo-floats', bounds ?? null], queryFn: ({ signal }) => argo.fetchArgoFloats(bounds, undefined, signal), enabled, staleTime: MIN, refetchInterval: enabled ? MIN : false, retry: (count, err) => !(err?.permanent ?? false) && count < 2 }) }
 export function useArgoDetail(wmo) { return useQuery({ queryKey: ['argo-detail', wmo], queryFn: ({ signal }) => argo.fetchArgoDetail(wmo, signal), enabled: wmo != null, staleTime: MIN, retry: false }) }
 export function useArgoProfile(wmo) { return useQuery({ queryKey: ['argo-profile', wmo], queryFn: ({ signal }) => argo.fetchArgoProfile(wmo, undefined, signal), enabled: wmo != null, staleTime: MIN, retry: false }) }
 export function useGliderStatus() { return useQuery({ queryKey: ['glider-status'], queryFn: ({ signal }) => fetchGliderStatus(signal), staleTime: LONG, retry: false }) }
