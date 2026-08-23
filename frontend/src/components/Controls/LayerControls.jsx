@@ -33,6 +33,8 @@ export default function LayerControls() {
   const toggleShowVolume = useOceanStore((s) => s.toggleShowVolume)
   const showArgoFloats = useOceanStore((s) => s.showArgoFloats)
   const toggleShowArgoFloats = useOceanStore((s) => s.toggleShowArgoFloats)
+  const showCurrents = useOceanStore((s) => s.showCurrents)
+  const toggleShowCurrents = useOceanStore((s) => s.toggleShowCurrents)
   const showGlider = useOceanStore((s) => s.showGlider)
   const toggleShowGlider = useOceanStore((s) => s.toggleShowGlider)
 
@@ -59,17 +61,18 @@ export default function LayerControls() {
         onChange={toggleShowArgoFloats}
       />
       <Toggle
-        label="Currents"
-        checked={false}
-        onChange={() => {}}
+        label="Current vectors"
+        checked={showCurrents && currentsAvailable}
+        onChange={toggleShowCurrents}
         badge={currentsAvailable ? 'Live' : 'N/A'}
-        disabled
+        disabled={!currentsAvailable}
       />
       <Toggle
         label="Gliders"
         checked={showGlider && gliderConfigured}
         onChange={toggleShowGlider}
         badge={gliderConfigured ? undefined : 'Soon'}
+        disabled={!gliderConfigured}
       />
     </div>
   )
