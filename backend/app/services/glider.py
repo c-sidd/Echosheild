@@ -3,29 +3,19 @@
 from __future__ import annotations
 
 import io
-import logging
 from typing import Any, Protocol
 
 import httpx
 import pandas as pd
 
 from app.core.config import Settings
-from app.models.schemas import (
-    GliderMission,
-    GliderMissionSummary,
-    GliderNotConfigured,
-    GliderProfilePoint,
-)
-
-_LOG = logging.getLogger("echoshield.glider")
+from app.models.schemas import GliderMission, GliderMissionSummary, GliderNotConfigured, GliderProfilePoint
 
 
 class GliderClient(Protocol):
     @property
     def configured(self) -> bool: ...
-
     async def search_missions(self, **filters: Any) -> Any: ...
-
     async def get_profiles(self, mission_id: str) -> Any: ...
 
 
@@ -51,11 +41,7 @@ def _not_configured() -> GliderNotConfigured:
 
 
 class ErddapGliderClient:
-    """Read real glider observations from an ERDDAP tabledap CSV endpoint.
-
-    The adapter accepts common CF/ERDDAP aliases instead of forcing one vendor
-    schema. It never invents missing measurements; absent columns become null.
-    """
+    """Read real glider observations from an ERDDAP tabledap CSV endpoint."""
 
     def __init__(self, url: str, timeout: float = 30.0) -> None:
         self.url = url.rstrip("/")
@@ -66,11 +52,11 @@ class ErddapGliderClient:
         return bool(self.url)
 
     async def _read(self, mission_id: str | None = None) -> pd.DataFrame:
-        params = {}
+        params: dict[str, str] = {}
         if mission_id:
-            # Request only the mission rows when the source exposes a mission_id
-            # column. If it does not, the server will return an explicit error.
-            params["mission_id"] = mission_id
+            # ERDDAP tabledap constraints are appended as query parameters.
+            # The value is quoted so IDs containing spaces or punctuation work.
+            params["mission_id"] = f'"{mission_id}"'
         async with httpx.AsyncClient(timeout=self.timeout, follow_redirects=True) as client:
             response = await client.get(f"{self.url}.csv0", params=params)
             response.raise_for_status()
@@ -86,25 +72,31 @@ class ErddapGliderClient:
 
     @classmethod
     def _mission_column(cls, df: pd.DataFrame) -> str | None:
-        return cls._column(df, "mission_id", "mission", "deployment_id", "deployment", "glider_id", "platform")
+        return cls._column(
+            df, "mission_id", "mission", "deployment_id", "deployment", "glider_id", "platform", "trajectory"
+        )
 
     @classmethod
     def _point(cls, row: pd.Series) -> GliderProfilePoint:
+        columns = {str(c).strip().lower(): c for c in row.index}
+
+        def find(*names: str) -> Any:
+            for name in names:
+                if name.lower() in columns:
+                    return row[columns[name.lower()]]
+            return None
+
         def value(*names: str) -> float | None:
-            col = cls._column(pd.DataFrame([row]), *names)
-            if not col:
-                return None
+            raw = find(*names)
             try:
-                v = float(row[col])
-                return v if pd.notna(v) else None
+                value = float(raw)
+                return value if pd.notna(value) else None
             except (TypeError, ValueError):
                 return None
 
         def text(*names: str) -> str | None:
-            col = cls._column(pd.DataFrame([row]), *names)
-            if not col or pd.isna(row[col]):
-                return None
-            return str(row[col])
+            raw = find(*names)
+            return None if raw is None or pd.isna(raw) else str(raw)
 
         return GliderProfilePoint(
             time=text("time", "timestamp", "datetime", "date"),
@@ -144,11 +136,7 @@ class ErddapGliderClient:
         matches = df[df[mission_col].astype(str) == mission_id]
         if matches.empty:
             raise KeyError(f"glider mission not found: {mission_id}")
-        return GliderMission(
-            mission_id=mission_id,
-            source=self.url,
-            points=[self._point(row) for _, row in matches.iterrows()],
-        )
+        return GliderMission(mission_id=mission_id, source=self.url, points=[self._point(row) for _, row in matches.iterrows()])
 
 
 class GliderService:
