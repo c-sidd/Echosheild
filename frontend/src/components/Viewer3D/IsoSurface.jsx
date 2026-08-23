@@ -27,7 +27,6 @@ export default function IsoSurface() {
     const latCount = slices[0].values.length
     const lonCount = slices[0].values[0].length
     if (latCount < 2 || lonCount < 2) return null
-
     const finite = []
     for (const slice of slices) for (const row of slice.values) for (const value of row ?? []) if (Number.isFinite(value)) finite.push(value)
     if (!finite.length) return null
@@ -35,12 +34,10 @@ export default function IsoSurface() {
     const max = Number.isFinite(colorMax) ? colorMax : Math.max(...finite)
     if (!(max > min)) return null
     const target = Number.isFinite(isoValue) ? isoValue : (min + max) / 2
-
     const mc = new MarchingCubes(RESOLUTION, new THREE.MeshBasicMaterial({ color: '#00d4ff', transparent: true, opacity: Math.min(0.9, opacity), side: THREE.DoubleSide, toneMapped: false }), false, false)
     mc.isolation = 0
     mc.reset()
     const field = mc.field
-    const depthSpan = Math.max(1, depths[depths.length - 1] - depths[0])
     const sample = (x, y, z) => {
       const xi = Math.min(lonCount - 1, Math.round((x / (RESOLUTION - 1)) * (lonCount - 1)))
       const yi = Math.min(latCount - 1, Math.round((y / (RESOLUTION - 1)) * (latCount - 1)))
@@ -48,13 +45,13 @@ export default function IsoSurface() {
       const value = Number(slices[zi]?.values?.[yi]?.[xi])
       return Number.isFinite(value) ? value : target
     }
-    const scale = Math.max(1, (max - min))
-    for (let z = 0; z < RESOLUTION; z++) for (let y = 0; y < RESOLUTION; y++) for (let x = 0; x < RESOLUTION; x++) {
-      field[x + y * RESOLUTION + z * RESOLUTION * RESOLUTION] = (sample(x, y, z) - target) / scale
-    }
+    const scale = max - min
+    for (let z = 0; z < RESOLUTION; z++) for (let y = 0; y < RESOLUTION; y++) for (let x = 0; x < RESOLUTION; x++) field[x + y * RESOLUTION + z * RESOLUTION * RESOLUTION] = (sample(x, y, z) - target) / scale
     mc.update()
-    mc.position.set(0, depthToY((depths[0] + depths[depths.length - 1]) / 2, verticalExaggeration), 0)
-    mc.scale.set(SCENE_WIDTH / 2, depthSpan * verticalExaggeration / 2, SCENE_DEPTH / 2)
+    const topY = depthToY(depths[0], verticalExaggeration)
+    const bottomY = depthToY(depths[depths.length - 1], verticalExaggeration)
+    mc.position.set(0, (topY + bottomY) / 2, 0)
+    mc.scale.set(SCENE_WIDTH / 2, Math.max(1, Math.abs(bottomY - topY) / 2), SCENE_DEPTH / 2)
     mc.frustumCulled = false
     return mc
   }, [show, stack.data, depths, colorMin, colorMax, isoValue, opacity, verticalExaggeration])
