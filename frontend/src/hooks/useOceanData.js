@@ -67,12 +67,18 @@ export async function fetchSliceStack(queryClient, id, variable, timeIndex, acti
   return results
 }
 
-export function useSliceStack(id, variable, timeIndex, activeDepth = null) {
+export function useSliceStack(id, variable, timeIndex, activeDepth = null, enabled = true) {
   const queryClient = useQueryClient()
   const depths = useOceanStore((s) => s.depths)
   const bbox = useOceanStore((s) => s.bbox)
   const renderDepths = selectRenderDepths(depths, activeDepth)
-  return useQuery({ queryKey: sliceStackKey(id, variable, timeIndex, renderDepths, bbox), queryFn: ({ signal }) => fetchSliceStack(queryClient, id, variable, timeIndex, activeDepth, bbox, signal), enabled: !!id && !!variable, staleTime: SLICE_STALE })
+  return useQuery({
+    queryKey: sliceStackKey(id, variable, timeIndex, renderDepths, bbox),
+    queryFn: ({ signal }) => fetchSliceStack(queryClient, id, variable, timeIndex, activeDepth, bbox, signal),
+    enabled: enabled && !!id && !!variable,
+    staleTime: SLICE_STALE,
+    placeholderData: (prev) => prev,
+  })
 }
 
 export function prefetchSliceStack(queryClient, id, variable, timeIndex, activeDepth = null) {
