@@ -330,11 +330,14 @@ All configuration flows through environment variables (or `backend/.env`) — se
 
 ## 👥 Team EchoShield
 
-| Name | Role |
+| Name | Email |
 |---|---|
-| Kartik Sharma | Full-stack & data engineering |
-
-*(add teammates here)*
+| Kartikey Singh *(Team Leader)* | kartikey.24b1531026@abes.ac.in |
+| Kartik Sharma | kartik.24b15310207@abes.ac.in |
+| Devansh Dhama | devansh.24b0101418@abes.ac.in |
+| Shaily Malik | shaily.24b0101617@abes.ac.in |
+| Shrishti Saini | shrishti.24b0101294@abes.ac.in |
+| Chandrachud Siddharth | chandrachud.24b0101356@abes.ac.in |
 
 ---
 
