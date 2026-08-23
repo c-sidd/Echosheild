@@ -1,74 +1,60 @@
-"""Glider API (explicitly reports *not configured* until a source exists)."""
+"""Glider API backed by the configured real-data provider."""
 
 from __future__ import annotations
 
 from fastapi import APIRouter, Request
 
-from app.models.schemas import GliderNotConfigured
+from app.models.schemas import GliderMission, GliderMissionSummary, GliderNotConfigured
 
 router = APIRouter(prefix="/glider", tags=["glider"])
 
 
-@router.get(
-    "/status",
-    summary="Glider ingestion status",
-    description="Whether a glider data source is configured for this deployment.",
-)
+@router.get("/status", summary="Glider ingestion status")
 async def status(request: Request) -> dict[str, object]:
     service = request.app.state.glider_service
+    client = getattr(service, "_client", None)
     return {
         "configured": service.configured,
-        "provider": "null" if not service.configured else type(service._client).__name__,
+        "provider": type(client).__name__ if service.configured else "null",
     }
 
 
 @router.get(
     "/missions",
-    response_model=GliderNotConfigured,
-    summary="List glider missions",
-    description=(
-        "Returns an explicit *not configured* response until a real glider"
-        " source is registered; glider data is never fabricated."
-    ),
+    response_model=list[GliderMissionSummary] | GliderNotConfigured,
+    summary="List real glider missions",
 )
-async def missions(request: Request) -> GliderNotConfigured:
+async def missions(request: Request) -> list[GliderMissionSummary] | GliderNotConfigured:
     result = await request.app.state.glider_service.list_missions()
-    if isinstance(result, GliderNotConfigured):
-        return result
-    return GliderNotConfigured(detail=str(result))
+    return result
 
 
 @router.get(
     "/missions/{mission_id}/profiles",
-    response_model=GliderNotConfigured,
-    summary="Profiles for one mission",
-    responses={200: {"description": "Not configured (or profiles once a source exists)"}},
+    response_model=GliderMission | GliderNotConfigured,
+    summary="Get profiles for one real glider mission",
 )
-async def mission_profiles(mission_id: str, request: Request) -> GliderNotConfigured:
+async def mission_profiles(
+    mission_id: str, request: Request
+) -> GliderMission | GliderNotConfigured:
     result = await request.app.state.glider_service.mission_profiles(mission_id)
-    if isinstance(result, GliderNotConfigured):
-        return result
-    return GliderNotConfigured(detail=str(result))
+    return result
 
 
-# --- Collection-style aliases (stable names for future providers) ------------
-
-
+# Stable collection aliases used by the frontend/provider adapters.
 @router.get(
-    "s",  # "/gliders" — alias of /glider/missions
-    response_model=GliderNotConfigured,
-    summary="List gliders (alias of /glider/missions)",
+    "/gliders",
+    response_model=list[GliderMissionSummary] | GliderNotConfigured,
     include_in_schema=False,
 )
-async def list_gliders(request: Request) -> GliderNotConfigured:
+async def list_gliders(request: Request) -> list[GliderMissionSummary] | GliderNotConfigured:
     return await missions(request)
 
 
 @router.get(
-    "s/{glider_id}",  # "/gliders/{id}" — alias of mission profiles
-    response_model=GliderNotConfigured,
-    summary="One glider (alias of /glider/missions/{id}/profiles)",
+    "/gliders/{glider_id}",
+    response_model=GliderMission | GliderNotConfigured,
     include_in_schema=False,
 )
-async def get_glider(glider_id: str, request: Request) -> GliderNotConfigured:
+async def get_glider(glider_id: str, request: Request) -> GliderMission | GliderNotConfigured:
     return await mission_profiles(glider_id, request)
