@@ -3,7 +3,8 @@
 
 FROM python:3.12-slim AS builder
 
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+# Pin uv so production builds are reproducible and match CI.
+COPY --from=ghcr.io/astral-sh/uv:0.7.19 /uv /usr/local/bin/uv
 
 ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
