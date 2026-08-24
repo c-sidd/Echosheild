@@ -16,7 +16,7 @@ import xarray as xr
 from app.core.config import Settings
 from app.ingestion import netcdf_parser as ncp
 from app.ingestion.variable_mapping import CanonicalVariable, classify_dataset_variables
-from app.models.schemas import CurrentsUnavailable, CurrentVectorField, DatasetExtent, DatasetInfo, DatasetMetadata, ModelSlice, OceanProfile, PointSample, ServiceEndpoints, SliceRequest, TimeRange, VariableMetadata
+from app.models.schemas import CurrentsUnavailable, CurrentVectorField, DatasetExtent, DatasetInfo, DatasetMetadata, DepthRange, ModelSlice, OceanProfile, PointSample, ServiceEndpoints, SliceRequest, TimeRange, VariableMetadata
 from app.services.dataset_registry import DatasetRegistry, RegisteredDataset
 
 _LOG = logging.getLogger("echoshield.model")
@@ -123,6 +123,11 @@ class ModelDataService:
     def get_depth_range(self, dataset_id: str) -> Any:
         return ncp.get_depth_range(self._open(self._registry.get(dataset_id)))
 
+    def get_vertical_kind(self, dataset_id: str) -> str:
+        """Vertical axis kind ('depth' | 'pressure' | 'other') for the dataset."""
+        depth_range = cast("DepthRange | None", self.get_depth_range(dataset_id))
+        return str(depth_range.vertical_kind) if depth_range is not None else "other"
+
     def get_time_range(self, dataset_id: str) -> Any:
         return ncp.get_time_range(self._open(self._registry.get(dataset_id)))
 
@@ -151,19 +156,36 @@ class ModelDataService:
         indexed the original coordinate array. A descending source axis could
         therefore return the wrong physical depth. Sorting the xarray view first
         keeps the parser's index and coordinate ordering identical without
-        loading the data into memory.
+        loading the data into memory. Height-above-surface axes (negative-up
+        storage) are additionally sign-normalised to positive-down so every
+        consumer (slice, profile, point) matches against identical values;
+        coordinate attributes are preserved and ``positive`` is inverted to
+        stay truthful about the stored convention.
         """
         cmap = ncp.CoordinateMap(ds)
         if cmap.vertical is None or cmap.vertical not in ds.dims:
             return ds
-        raw = np.asarray(ds[cmap.vertical].values).ravel().astype(float)
+        coord = ds[cmap.vertical]
+        raw = np.asarray(coord.values).ravel().astype(float)
         if raw.size < 2:
             return ds
-        normalized = -raw if cmap.vertical_kind == "depth" and np.nanmin(raw) < 0 else raw
+        sign_flip = cmap.vertical_kind == "depth" and bool(np.nanmin(raw) < 0)
+        normalized = -raw if sign_flip else raw
         order = np.argsort(normalized, kind="stable")
-        if np.array_equal(order, np.arange(raw.size)):
+        needs_permutation = not np.array_equal(order, np.arange(raw.size))
+        if not needs_permutation and not sign_flip:
             return ds
-        return ds.isel({cmap.vertical: order})
+        view = ds.isel({cmap.vertical: order}) if needs_permutation else ds
+        if sign_flip:
+            flipped = -view[cmap.vertical]
+            attrs = dict(flipped.attrs)
+            if attrs.get("positive") == "up":
+                attrs["positive"] = "down"
+            elif attrs.get("positive") == "down":
+                attrs["positive"] = "up"
+            flipped.attrs = attrs
+            view = view.assign_coords({cmap.vertical: flipped})
+        return view
 
     def read_slice(self, dataset_id: str, variable: str, *, time_index: int | None, depth_meters: float | None, bbox: tuple[float, float, float, float] | None) -> ModelSlice:
         key = self._slice_key(dataset_id, variable, time_index, depth_meters, bbox)
@@ -182,13 +204,13 @@ class ModelDataService:
         return self._store_slice(key, slice_)
 
     def read_profile(self, dataset_id: str, variable: str, *, latitude: float, longitude: float, time_index: int | None) -> OceanProfile:
-        ds = self._open(self._registry.get(dataset_id))
+        ds = self._sorted_vertical_view(self._open(self._registry.get(dataset_id)))
         profile = ncp.read_profile(ds, self._resolve_variable(ds, variable), latitude=latitude, longitude=longitude, time_index=time_index, max_points=self._settings.MAX_PROFILE_POINTS)
         profile.dataset_id = dataset_id
         return profile
 
     def read_point(self, dataset_id: str, variables: list[str], *, latitude: float, longitude: float, time_index: int | None, depth_meters: float | None) -> PointSample:
-        ds = self._open(self._registry.get(dataset_id))
+        ds = self._sorted_vertical_view(self._open(self._registry.get(dataset_id)))
         sample = ncp.read_point(ds, [self._resolve_variable(ds, v) for v in variables], latitude=latitude, longitude=longitude, time_index=time_index, depth_meters=depth_meters)
         sample.dataset_id = dataset_id
         return sample
