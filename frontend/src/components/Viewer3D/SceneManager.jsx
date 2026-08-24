@@ -1,36 +1,26 @@
 import { useEffect, useRef } from 'react'
 import { useThree } from '@react-three/fiber'
-import { OrbitControls, Stars, Grid } from '@react-three/drei'
-import {
-  EffectComposer,
-  Bloom,
-  DepthOfField,
-  ChromaticAberration,
-  Vignette,
-  Noise,
-} from '@react-three/postprocessing'
+import { OrbitControls, Grid } from '@react-three/drei'
+import { EffectComposer, Bloom, Vignette } from '@react-three/postprocessing'
 import gsap from 'gsap'
-import * as THREE from 'three'
 import { useOceanStore } from '@/store/oceanStore'
 
 export default function SceneManager() {
   const camera = useThree((s) => s.camera)
   const controlsRef = useRef()
   const bounds = useOceanStore(
-    (s) =>
-      s.datasets.find((d) => d.id === s.activeDatasetId)?.spatial_bounds ?? null,
+    (s) => s.datasets.find((d) => d.id === s.activeDatasetId)?.spatial_bounds ?? null,
   )
   const activeDepth = useOceanStore((s) => s.activeDepth)
 
-  // Smooth fly-to the dataset domain center on load / dataset switch.
   useEffect(() => {
-    if (!bounds) return
+    if (!bounds) return undefined
     gsap.to(camera.position, {
       x: 0,
       y: 85,
       z: 125,
-      duration: 1.6,
-      ease: 'power3.inOut',
+      duration: 1.1,
+      ease: 'power2.inOut',
       onUpdate: () => camera.lookAt(0, -10, 0),
     })
     if (controlsRef.current) {
@@ -38,49 +28,43 @@ export default function SceneManager() {
         x: 0,
         y: -12,
         z: 0,
-        duration: 1.6,
-        ease: 'power3.inOut',
+        duration: 1.1,
+        ease: 'power2.inOut',
         onUpdate: () => controlsRef.current?.update(),
       })
     }
-  }, [bounds?.west, bounds?.east, bounds?.south, bounds?.north])
+    return () => gsap.killTweensOf([camera.position, controlsRef.current?.target].filter(Boolean))
+  }, [bounds?.west, bounds?.east, bounds?.south, bounds?.north, camera])
 
-  // Subtle camera tilt when navigating depth.
   useEffect(() => {
-    if (!controlsRef.current) return
+    if (!controlsRef.current || !Number.isFinite(activeDepth)) return undefined
     gsap.to(controlsRef.current.target, {
-      y: -(activeDepth / 2000) * 50 * 0.6,
-      duration: 0.7,
+      y: -(activeDepth / 2000) * 30,
+      duration: 0.45,
       ease: 'power2.out',
       onUpdate: () => controlsRef.current?.update(),
     })
+    return () => gsap.killTweensOf(controlsRef.current?.target)
   }, [activeDepth])
 
   return (
     <>
-      <ambientLight intensity={0.1} color="#001a33" />
-      <directionalLight
-        position={[50, 200, 50]}
-        intensity={0.8}
-        color="#4dd9ff"
-        castShadow
-      />
-      <pointLight position={[0, -20, 0]} intensity={2} color="#006699" distance={300} />
+      <ambientLight intensity={0.12} color="#001a33" />
+      <directionalLight position={[50, 200, 50]} intensity={0.8} color="#4dd9ff" />
       <hemisphereLight args={['#0a2a4a', '#01060e', 0.25]} />
 
-      <Stars radius={300} depth={60} count={3000} factor={4} saturation={0} fade speed={0.6} />
-
-      {/* Lat/lon-style coordinate overlay on the ocean surface */}
+      {/* Orientation aid only; keep the grid deliberately sparse because it
+          competes with scientific layers and adds unnecessary line work. */}
       <Grid
         position={[0, 0.1, 0]}
         args={[130, 90]}
-        cellSize={10}
-        cellThickness={0.3}
+        cellSize={15}
+        cellThickness={0.18}
         cellColor="#0a2a4a"
-        sectionSize={30}
-        sectionThickness={0.5}
+        sectionSize={45}
+        sectionThickness={0.35}
         sectionColor="#0d3a5a"
-        fadeDistance={200}
+        fadeDistance={150}
         fadeStrength={2}
         infiniteGrid={false}
       />
@@ -90,19 +74,16 @@ export default function SceneManager() {
       <OrbitControls
         ref={controlsRef}
         enableDamping
-        dampingFactor={0.05}
+        dampingFactor={0.06}
         minDistance={30}
         maxDistance={500}
         maxPolarAngle={Math.PI / 2.1}
         target={[0, -12, 0]}
       />
 
-      <EffectComposer>
-        <Bloom luminanceThreshold={0.3} luminanceSmoothing={0.9} intensity={1.2} />
-        <DepthOfField focusDistance={0} focalLength={0.02} bokehScale={2} />
-        <ChromaticAberration offset={new THREE.Vector2(0.0005, 0.0005)} radialModulation={false} modulationOffset={0} />
-        <Vignette eskil={false} offset={0.1} darkness={0.8} />
-        <Noise opacity={0.03} />
+      <EffectComposer multisampling={0}>
+        <Bloom luminanceThreshold={0.45} luminanceSmoothing={0.9} intensity={0.65} />
+        <Vignette eskil={false} offset={0.12} darkness={0.45} />
       </EffectComposer>
     </>
   )

@@ -14,6 +14,7 @@ import ColorbandLegend from '@/components/UI/ColorbandLegend'
 import UpstreamBanner from '@/components/UI/UpstreamBanner'
 import LoadingOverlay from '@/components/UI/LoadingOverlay'
 import GliderPlaceholder from '@/components/UI/GliderPlaceholder'
+import ModelComparisonPanel from '@/components/UI/ModelComparisonPanel'
 import { useDatasetSync, useDatasets } from '@/hooks/useOceanData'
 import { useTimeAnimation } from '@/hooks/useTimeAnimation'
 import { useOceanStore } from '@/store/oceanStore'
@@ -27,37 +28,27 @@ export default function Dashboard() {
   useTimeAnimation()
 
   useEffect(() => {
-    if (Array.isArray(datasetsQuery.data)) {
-      setDatasets(datasetsQuery.data)
-    }
+    if (Array.isArray(datasetsQuery.data)) setDatasets(datasetsQuery.data)
   }, [datasetsQuery.data, setDatasets])
 
-  // Keep the splash up until real renderable data (depth levels) arrives,
-  // so the user never sees a black canvas gap after datasets resolve.
-  const sliceReady = useOceanStore(
-    (s) => s.dataLoadedAt != null || s.depths.length > 0,
-  )
+  const sliceReady = useOceanStore((s) => s.dataLoadedAt != null || s.depths.length > 0)
 
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-abyss">
-      <SceneErrorBoundary>
-        {viewMode === '3D' ? <OceanViewer /> : <OceanMap />}
-      </SceneErrorBoundary>
-
+      <SceneErrorBoundary>{viewMode === '3D' ? <OceanViewer /> : <OceanMap />}</SceneErrorBoundary>
       <Header />
       <Sidebar />
       <DepthSlider />
       <TimeControls />
       <ProfileChart />
+      <ModelComparisonPanel />
       <MetadataPanel />
       <ServicesPanel />
       <ColorbandLegend />
       <GliderPlaceholder />
       <HoverInspector />
       <UpstreamBanner />
-      <LoadingOverlay
-        loading={datasetsQuery.isLoading || (!sliceReady && !datasetsQuery.isError)}
-      />
+      <LoadingOverlay loading={datasetsQuery.isLoading || (!sliceReady && !datasetsQuery.isError)} />
     </div>
   )
 }

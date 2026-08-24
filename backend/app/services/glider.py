@@ -1,11 +1,4 @@
-"""Glider ingestion architecture.
-
-EchoShield must support future glider sources without coupling the backend to
-a single provider. A concrete ``GliderClient`` can be registered later (ERDDAP
-tabledap, THREDDS-hosted NetCDF, vendor APIs...). When no source is
-configured, :class:`NullGliderClient` returns an explicit *not configured*
-response — real glider data is never fabricated.
-"""
+"""Provider-agnostic glider service."""
 
 from __future__ import annotations
 
@@ -13,31 +6,21 @@ import logging
 from typing import Any, Protocol
 
 from app.core.config import Settings
+from app.ingestion.glider_netcdf import NetCDFGliderClient
 from app.models.schemas import GliderNotConfigured
 
 _LOG = logging.getLogger("echoshield.glider")
 
 
 class GliderClient(Protocol):
-    """Contract every glider provider client must satisfy."""
-
     @property
-    def configured(self) -> bool:
-        """Whether a real data source is available."""
-        ...
+    def configured(self) -> bool: ...
 
-    async def search_missions(self, **filters: Any) -> Any:
-        """List missions/floats matching filters."""
-        ...
-
-    async def get_profiles(self, mission_id: str) -> Any:
-        """Fetch profiles for one mission."""
-        ...
+    async def search_missions(self, **filters: Any) -> Any: ...
+    async def get_profiles(self, mission_id: str) -> Any: ...
 
 
 class NullGliderClient:
-    """Default client used when no glider source is configured."""
-
     @property
     def configured(self) -> bool:
         return False
@@ -50,24 +33,24 @@ class NullGliderClient:
 
 
 def _not_configured() -> GliderNotConfigured:
-    return GliderNotConfigured(
-        detail=(
-            "No glider data source is configured. Set GLIDER_DATA_URL"
-            " and register a GliderClient implementation to enable this API."
-        )
-    )
+    return GliderNotConfigured(detail="No glider data source is configured. Set GLIDER_DATA_URL to an authorized NetCDF/OPeNDAP source.")
 
 
 class GliderService:
-    """Provider-agnostic facade over the configured :class:`GliderClient`."""
+    """Facade that selects the configured real glider provider."""
 
     def __init__(self, settings: Settings, client: GliderClient | None = None) -> None:
         self._settings = settings
-        self._client: GliderClient = client if client is not None else self._default_client()
+        self._client: GliderClient = client if client is not None else self._default_client(settings)
 
     @staticmethod
-    def _default_client() -> GliderClient:
-        # Future: choose ERDDAP/THREDDS/vendor clients based on settings.
+    def _default_client(settings: Settings) -> GliderClient:
+        source = getattr(settings, "GLIDER_DATA_URL", "") or ""
+        if source:
+            try:
+                return NetCDFGliderClient(source)
+            except Exception as exc:  # noqa: BLE001
+                _LOG.warning("glider_client_init_failed error=%r", exc)
         return NullGliderClient()
 
     @property

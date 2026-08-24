@@ -42,9 +42,10 @@ export function useTimeAnimation() {
     return () => cancelAnimationFrame(frameRef.current)
   }, [isPlaying, playSpeed, count])
 
-  // Prefetch ahead so playback never stalls on the network.
+  // Prefetch only during active playback. Keeping this disabled while the
+  // user is scrubbing/reading avoids hidden network and memory pressure.
   useEffect(() => {
-    if (!datasetId || !variable) return
+    if (!isPlaying || !datasetId || !variable) return
     const maxIndex = count - 1
 
     function wrap(i) {
@@ -54,7 +55,6 @@ export function useTimeAnimation() {
     if (viewMode === '3D') {
       prefetchSliceStack(queryClient, datasetId, variable, wrap(timeIndex + 1))
     } else if (Number.isFinite(depth)) {
-      // One round-trip instead of three parallel slice requests.
       const batch = [timeIndex + 1, timeIndex + 2, timeIndex + 3]
         .map(wrap)
         .map((t) => ({ variable, time_index: t, depth_meters: depth }))
@@ -64,9 +64,8 @@ export function useTimeAnimation() {
         staleTime: SLICE_STALE,
       })
     }
-  }, [queryClient, datasetId, variable, timeIndex, count, depth, viewMode])
+  }, [isPlaying, queryClient, datasetId, variable, timeIndex, count, depth, viewMode])
 
-  // Keep the rAF-driven lastStep in sync for external consumers.
   useEffect(() => {
     lastStepRef.current = timeIndex
   }, [timeIndex])

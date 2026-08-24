@@ -7,11 +7,11 @@ import { useArgoFloats } from '@/hooks/useOceanData'
 import { makeDomainMapping } from '@/utils/depthUtils'
 
 const SURFACE_Y = 0.6
+const MAX_FLOATS = 80
 
 function FloatMarker({ floatData, lonToX, latToZ }) {
   const selectedFloat = useOceanStore((s) => s.selectedFloat)
   const setSelectedFloat = useOceanStore((s) => s.setSelectedFloat)
-
   const [lat, lon] = floatData.last_location
   const x = lonToX(lon)
   const z = latToZ(lat)
@@ -25,68 +25,50 @@ function FloatMarker({ floatData, lonToX, latToZ }) {
           setSelectedFloat(floatData)
         }}
       >
-        <sphereGeometry args={[isSelected ? 1.2 : 0.8, 16, 16]} />
-        <meshStandardMaterial
-          color="#00303f"
-          emissive="#00ffff"
-          emissiveIntensity={isSelected ? 3 : 1.8}
-          toneMapped={false}
-        />
+        <sphereGeometry args={[isSelected ? 1.15 : 0.72, 10, 10]} />
+        <meshBasicMaterial color={isSelected ? '#00ffff' : '#007b91'} toneMapped={false} />
       </mesh>
-      <pointLight color="#00ffff" intensity={isSelected ? 4 : 1.5} distance={12} />
-      <PulseRing active={isSelected} />
+      {isSelected && <PulseRing />}
     </group>
   )
 }
 
-function PulseRing({ active }) {
-  const ringRef = useMemo(() => ({ t: Math.random() * Math.PI * 2 }), [])
+function PulseRing() {
   const ref = useRef()
-  useFrame(() => {
+  const t = useRef(0)
+  useFrame((_state, delta) => {
     if (!ref.current) return
-    ringRef.t += 0.02
-    const s = (Math.sin(ringRef.t) + 1) / 2
-    ref.current.scale.setScalar(1 + s * 1.6)
-    ref.current.material.opacity = (active ? 0.5 : 0.25) * (1 - s)
+    t.current += delta
+    const s = (Math.sin(t.current * 4) + 1) / 2
+    ref.current.scale.setScalar(1 + s * 1.5)
+    ref.current.material.opacity = 0.5 * (1 - s)
   })
   return (
-    <sprite ref={ref}>
-      <spriteMaterial
-        color="#00d4ff"
-        transparent
-        opacity={0.3}
-        depthWrite={false}
-        toneMapped={false}
-      />
+    <sprite ref={ref} scale={1.2}>
+      <spriteMaterial color="#00d4ff" transparent opacity={0.35} depthWrite={false} toneMapped={false} />
     </sprite>
   )
 }
 
 export default function InstrumentMarkers() {
   const show = useOceanStore((s) => s.showArgoFloats)
-  const bounds = useOceanStore(
+  const bounds = useOceanStore((s) => s.bbox)
+  const datasetBounds = useOceanStore(
     (s) => s.datasets.find((d) => d.id === s.activeDatasetId)?.spatial_bounds,
   )
-  const floatsQuery = useArgoFloats()
-
-  const mapping = useMemo(() => makeDomainMapping(bounds), [bounds])
-
+  const floatsQuery = useArgoFloats(bounds, show)
+  const mapping = useMemo(() => makeDomainMapping(datasetBounds), [datasetBounds])
   const floats = useMemo(() => {
     const data = floatsQuery.data
-    return Array.isArray(data) ? data.slice(0, 120) : []
+    return Array.isArray(data) ? data.slice(0, MAX_FLOATS) : []
   }, [floatsQuery.data])
 
-  // Staggered pop-in on load.
-  const ready = floatsQuery.isSuccess && floats.length > 0
-
-  if (!show || !ready || floatsQuery.isError) {
-    return null
-  }
+  if (!show || !floatsQuery.isSuccess || !floats.length || floatsQuery.isError) return null
 
   return (
     <group>
       {floats.map((f, i) => (
-        <PopIn key={f.platform_wmo} delay={Math.min(i * 40, 2000)}>
+        <PopIn key={f.platform_wmo} delay={Math.min(i * 20, 800)}>
           <FloatMarker floatData={f} lonToX={mapping.lonToX} latToZ={mapping.latToZ} />
         </PopIn>
       ))}
@@ -104,11 +86,8 @@ function PopIn({ delay, children }) {
       startedAt.current = now + delay
       groupRef.current.scale.setScalar(0.001)
     }
-    const t = THREE.MathUtils.clamp((now - startedAt.current) / 400, 0, 1)
-    if (t > 0) {
-      const eased = 1 - Math.pow(1 - t, 3)
-      groupRef.current.scale.setScalar(eased)
-    }
+    const t = THREE.MathUtils.clamp((now - startedAt.current) / 300, 0, 1)
+    if (t > 0) groupRef.current.scale.setScalar(1 - (1 - t) ** 3)
   })
   return <group ref={groupRef}>{children}</group>
 }
