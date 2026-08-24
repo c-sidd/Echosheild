@@ -63,12 +63,6 @@ export default function OceanViewer() {
     }
 
     canvas.addEventListener('webglcontextlost', handleContextLost, { once: true })
-
-    // Store the cleanup on the canvas so it survives the React Three Fiber
-    // renderer lifecycle without leaking listeners.
-    canvas.__echoShieldCleanupWebGL = () => {
-      canvas.removeEventListener('webglcontextlost', handleContextLost)
-    }
   }, [recover])
 
   if (recovering) {
