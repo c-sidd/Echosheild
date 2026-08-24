@@ -386,9 +386,10 @@ def create_argo_client(settings: Settings) -> ArgoClient | LocalArgoClient | Nul
     """Pick the Argo provider per configuration.
 
     ``auto`` prefers real local profile files in ``ARGO_CACHE_DIR`` when any
-    exist; otherwise the remote argopy client is used. ``local``/``remote``
-    force one side explicitly. Construction failures degrade to
-    :class:`NullArgoClient` so the application still boots.
+    exist; otherwise falls back to :class:`NullArgoClient` (clean 503 for
+    local dev without network).  Use ``remote`` to explicitly enable live
+    argopy fetching. ``local``/``remote`` force one side explicitly.
+    Construction failures always degrade to :class:`NullArgoClient`.
     """
     from app.ingestion.argo_local import LocalArgoClient
 
@@ -398,11 +399,19 @@ def create_argo_client(settings: Settings) -> ArgoClient | LocalArgoClient | Nul
             return LocalArgoClient(settings)
         if mode == "remote":
             return ArgoClient(settings)
+        # auto: prefer local .nc files; if none present, use NullArgoClient
+        # rather than the remote client.  Remote makes network calls at
+        # startup (argopy initialises on first use) which fail in environments
+        # without outbound TLS to Ifremer ERDDAP.  Callers that want remote
+        # should set ARGO_PROVIDER=remote explicitly.
         cache = settings.argo_cache_dir
         has_local_files = cache.is_dir() and any(cache.glob("*.nc"))
         if has_local_files:
             return LocalArgoClient(settings)
-        return ArgoClient(settings)
+        _LOG.info(
+            "argo_provider_auto_null reason=no_local_nc_files cache=%s", cache
+        )
+        return NullArgoClient()
     except Exception as exc:  # noqa: BLE001 - optional provider, never fatal
         _LOG.warning("argo_provider_init_failed mode=%s error=%r", mode, exc)
         return NullArgoClient()
