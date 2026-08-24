@@ -2,12 +2,10 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import threading
 import time
 from collections import OrderedDict
-from functools import partial
 from typing import Any, cast
 
 import numpy as np
