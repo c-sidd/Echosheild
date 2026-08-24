@@ -25,20 +25,25 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-          cache: pip
-          cache-dependency-path: backend/requirements.txt
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: latest
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
 
       - name: Install dependencies
-        run: python -m pip install -r requirements.txt
+        run: uv sync --frozen --dev
 
       - name: Run tests
-        run: pytest
+        run: uv run pytest
 
       - name: Run Ruff
-        run: ruff check .
+        run: uv run ruff check .
 
       - name: Run mypy
-        run: mypy app
+        run: uv run mypy app
 
   frontend:
     name: Frontend checks
