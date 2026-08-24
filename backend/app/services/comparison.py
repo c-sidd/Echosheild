@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from math import sqrt
 from statistics import mean
+from typing import cast
 
 from pydantic import BaseModel, Field
 
@@ -137,11 +138,11 @@ def compare_profile(model: ModelDataService, dataset_id: str, profile: ArgoProfi
         model_time=model_time,
         model_time_index=model_time_index,
         metrics=ComparisonMetrics(
-            temperature_count=tm["temperature_count"],
+            temperature_count=cast(int, tm["temperature_count"]),
             temperature_bias_c=tm["temperature_bias"],
             temperature_mae_c=tm["temperature_mae"],
             temperature_rmse_c=tm["temperature_rmse"],
-            salinity_count=sm["salinity_count"],
+            salinity_count=cast(int, sm["salinity_count"]),
             salinity_bias_psu=sm["salinity_bias"],
             salinity_mae_psu=sm["salinity_mae"],
             salinity_rmse_psu=sm["salinity_rmse"],

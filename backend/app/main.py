@@ -21,7 +21,11 @@ from app.ingestion.thredds_client import ThreddsClient, ThreddsClientError
 from app.services.curated_sources import register_curated_sources
 from app.services.dataset_registry import DatasetRegistry
 from app.services.glider import GliderService
-from app.services.model_service import DatasetNotAccessibleError, ModelDataService, UpstreamUnavailableError
+from app.services.model_service import (
+    DatasetNotAccessibleError,
+    ModelDataService,
+    UpstreamUnavailableError,
+)
 
 _LOG = logging.getLogger("echoshield")
 
@@ -30,7 +34,7 @@ _LOG = logging.getLogger("echoshield")
 async def _lifespan_for(app: FastAPI, settings: Settings) -> AsyncIterator[None]:
     settings.ensure_directories()
     registry = DatasetRegistry(settings, thredds_client=app.state.thredds_client)
-    discovered = registry.discover()
+    registry.discover()
     register_curated_sources(registry)
     _LOG.info("startup datasets_registered=%d", len(registry.list()))
 

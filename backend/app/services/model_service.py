@@ -16,7 +16,20 @@ import xarray as xr
 from app.core.config import Settings
 from app.ingestion import netcdf_parser as ncp
 from app.ingestion.variable_mapping import CanonicalVariable, classify_dataset_variables
-from app.models.schemas import CurrentsUnavailable, CurrentVectorField, DatasetExtent, DatasetInfo, DatasetMetadata, ModelSlice, OceanProfile, PointSample, ServiceEndpoints, SliceRequest, TimeRange, VariableMetadata
+from app.models.schemas import (
+    CurrentsUnavailable,
+    CurrentVectorField,
+    DatasetExtent,
+    DatasetInfo,
+    DatasetMetadata,
+    ModelSlice,
+    OceanProfile,
+    PointSample,
+    ServiceEndpoints,
+    SliceRequest,
+    TimeRange,
+    VariableMetadata,
+)
 from app.services.dataset_registry import DatasetRegistry, RegisteredDataset
 
 _LOG = logging.getLogger("echoshield.model")
@@ -205,9 +218,11 @@ class ModelDataService:
         max_speed: float | None = None
         for row_u, row_v in zip(u_slice.values, v_slice.values, strict=False):
             for value_u, value_v in zip(row_u, row_v, strict=False):
-                if value_u is None or value_v is None: continue
+                if value_u is None or value_v is None:
+                    continue
                 speed_sq = value_u * value_u + value_v * value_v
-                if max_speed is None or speed_sq > max_speed: max_speed = speed_sq
+                if max_speed is None or speed_sq > max_speed:
+                    max_speed = speed_sq
         units = u_slice.units or v_slice.units
         speed_ms = round(max_speed**0.5, 6) if max_speed is not None else None
         if units and "cm" in units.lower():
