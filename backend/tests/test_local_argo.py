@@ -49,8 +49,19 @@ def test_factory_auto_prefers_local_files(local_argo_settings: Settings) -> None
     assert isinstance(client, LocalArgoClient)
 
 
-def test_factory_auto_falls_back_to_remote(settings: Settings) -> None:
-    assert isinstance(create_argo_client(settings), ArgoClient)
+def test_factory_auto_falls_back_to_null_when_no_local_files(settings: Settings) -> None:
+    """Without local .nc files, auto mode returns NullArgoClient (not remote).
+
+    NullArgoClient returns clean 503 responses instead of making network calls
+    to Ifremer ERDDAP that will fail in CI/local dev without outbound TLS.
+    Use ARGO_PROVIDER=remote to explicitly enable live fetching.
+    """
+    from app.ingestion.argo_client import NullArgoClient
+
+    # Force auto mode explicitly — backend/.env may set ARGO_PROVIDER=local
+    # which would override the test's intent via pydantic-settings.
+    auto_settings = settings.model_copy(update={"ARGO_PROVIDER": "auto"})
+    assert isinstance(create_argo_client(auto_settings), NullArgoClient)
 
 
 def test_factory_respects_explicit_mode(settings: Settings) -> None:

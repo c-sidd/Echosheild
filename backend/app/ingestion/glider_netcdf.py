@@ -65,7 +65,8 @@ class NetCDFGliderClient:
         ds = await asyncio.to_thread(self._open)
         coords = resolve_coordinates(ds)
         variables = self._variables(ds)
-        result = {"mission_id": mission_id, "source": self.source, "profiles": []}
+        profiles: list[dict[str, Any]] = []
+        result: dict[str, Any] = {"mission_id": mission_id, "source": self.source, "profiles": profiles}
         if not coords.latitude or not coords.longitude:
             return result
         for index in range(int(ds.sizes.get(coords.time, 1))) if coords.time else [0]:
@@ -79,5 +80,5 @@ class NetCDFGliderClient:
                     value = np.asarray(ds[name].values).ravel()
                 finite = value[np.isfinite(value)] if value.size else value
                 point[key] = float(finite[-1]) if finite.size else None
-            result["profiles"].append(point)
+            profiles.append(point)
         return result

@@ -7,6 +7,7 @@ import pandas as pd
 import pytest
 import xarray as xr
 
+from app.core.config import Settings
 from app.ingestion.argo_client import ArgoClient, ArgoClientError, _create_fetcher
 
 
@@ -128,18 +129,27 @@ def test_region_box_meets_argopy_minimum(
 
 
 def test_argo_api_returns_503_when_upstream_down(
-    client,  # noqa: ANN001 - TestClient fixture
+    settings: Settings,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """The API degrades gracefully: argopy failure must never crash the app."""
+    from fastapi.testclient import TestClient
+
+    from app.main import create_app
+
+    # Force remote provider so ArgoClient is used and _create_fetcher fires.
+    remote_settings = settings.model_copy(update={"ARGO_PROVIDER": "remote"})
 
     def boom(*args: object, **kwargs: object) -> object:
         raise TimeoutError("erddap unreachable")
 
     monkeypatch.setattr("app.ingestion.argo_client._create_fetcher", boom)
-    response = client.get("/api/v1/argo/floats")
+    app = create_app(remote_settings)
+    with TestClient(app) as test_client:
+        response = test_client.get("/api/v1/argo/floats")
     assert response.status_code == 503
     assert "upstream unavailable" in response.json()["detail"]
+
 
 
 def test_empty_region_raises_clear_error(monkeypatch: pytest.MonkeyPatch, settings) -> None:

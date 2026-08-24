@@ -23,7 +23,8 @@ class UpstreamUnavailable(RuntimeError):
 
 
 def _client(request: Request) -> ArgoClient:
-    return request.app.state.argo_client
+    client: ArgoClient = request.app.state.argo_client
+    return client
 
 
 @router.get("/floats", response_model=list[ArgoFloatSummary], summary="Search Argo floats", responses={503: {"description": "Argo upstream unavailable"}})

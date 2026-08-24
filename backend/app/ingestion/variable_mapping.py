@@ -110,9 +110,12 @@ def resolve_coordinates(ds: xr.Dataset) -> ResolvedCoordinates:
         vertical_kind, vertical_units = _vertical_kind(ds, vertical_name)
 
     mapping: dict[str, str] = {}
-    if time_name: mapping["time"] = time_name
-    if lat_name: mapping["latitude"] = lat_name
-    if lon_name: mapping["longitude"] = lon_name
+    if time_name:
+        mapping["time"] = time_name
+    if lat_name:
+        mapping["latitude"] = lat_name
+    if lon_name:
+        mapping["longitude"] = lon_name
     if vertical_name:
         mapping["depth" if vertical_kind == "depth" else "pressure" if vertical_kind == "pressure" else "vertical"] = vertical_name
 
