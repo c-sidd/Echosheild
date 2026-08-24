@@ -47,11 +47,17 @@ class ModelObservationComparison(BaseModel):
     points: list[ComparisonPoint] = Field(default_factory=list)
 
 
+def _as_naive_utc(value: datetime) -> datetime:
+    # Argo feeds stamp UTC; decoded NetCDF times are usually tz-naive.
+    # Compare wall-clock values so both conventions can be diffed.
+    return value.replace(tzinfo=None) if value.tzinfo is not None else value
+
+
 def _parse_time(value: str | None) -> datetime | None:
     if not value:
         return None
     try:
-        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+        return _as_naive_utc(datetime.fromisoformat(value.replace("Z", "+00:00")))
     except ValueError:
         return None
 

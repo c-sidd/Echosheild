@@ -85,11 +85,18 @@ def compare_float(
     dataset_id: str = Query(default="incois_argo_mnt_VAM"),
     cycle: int | None = Query(default=None, ge=0),
 ) -> ModelObservationComparison:
+    service = request.app.state.model_service
+    vertical_kind = service.get_vertical_kind(dataset_id)
+    if vertical_kind != "depth":
+        raise ValueError(
+            f"dataset {dataset_id!r} has vertical_kind={vertical_kind!r}; comparison"
+            " against meter-based Argo observations requires a depth-coordinate model"
+        )
     try:
         profile = _client(request).float_profile(float_id, cycle=cycle)
     except ArgoClientError as exc:
         raise UpstreamUnavailable(str(exc)) from exc
-    return compare_profile(request.app.state.model_service, dataset_id, profile)
+    return compare_profile(service, dataset_id, profile)
 
 
 @router.get("/search", response_model=list[ArgoFloatSummary], summary="Keyword-free region/time search alias", responses={503: {"description": "Argo upstream unavailable"}})
