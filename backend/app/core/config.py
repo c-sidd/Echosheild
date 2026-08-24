@@ -70,7 +70,8 @@ class Settings(BaseSettings):
     ARGO_SOURCE: Literal["erddap", "gdac"] = "erddap"
     ARGO_DATASET: str = "phy"
     # Provider selection: "auto" prefers real local files in ARGO_CACHE_DIR
-    # when present, otherwise the remote argopy client is used.
+    # when present; otherwise it uses NullArgoClient so startup stays offline.
+    # Set ARGO_PROVIDER=remote explicitly to enable live argopy fetching.
     ARGO_PROVIDER: Literal["auto", "local", "remote"] = "auto"
     # Timeout for argopy upstream HTTP requests (seconds).
     # Ifremer ERDDAP bulk-region queries for the Indian Ocean can exceed
