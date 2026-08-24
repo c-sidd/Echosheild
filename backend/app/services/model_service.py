@@ -222,6 +222,20 @@ class ModelDataService:
         return (u_name, v_name) if u_name is not None and v_name is not None else None
 
     async def read_slice_batch(self, dataset_id: str, requests: list[SliceRequest]) -> list[ModelSlice]:
-        loop = asyncio.get_running_loop()
-        tasks = [loop.run_in_executor(None, partial(self.read_slice, dataset_id, request.variable, time_index=request.time_index, depth_meters=request.depth_meters, bbox=request.bbox())) for request in requests]
-        return list(await asyncio.gather(*tasks))
+        """Read a bounded batch serially to avoid concurrent NetCDF4 I/O.
+
+        The netCDF4-backed xarray engine can segfault when the same cached
+        Dataset is opened/read concurrently from multiple executor threads.
+        The batch endpoint still reduces HTTP overhead while preserving the
+        request order and avoiding unsafe native-library concurrency.
+        """
+        return [
+            self.read_slice(
+                dataset_id,
+                request.variable,
+                time_index=request.time_index,
+                depth_meters=request.depth_meters,
+                bbox=request.bbox(),
+            )
+            for request in requests
+        ]
